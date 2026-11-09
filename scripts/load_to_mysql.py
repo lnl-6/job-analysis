@@ -157,9 +157,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if blocked else 0
     except db.DatabaseError as exc:
         print(f"[错误] {exc}")
+        _print_debug_traceback()
         return 2
     except Exception as exc:  # noqa: BLE001 - CLI 要给可读的失败信息，而不是整段堆栈
         print(f"[错误] {type(exc).__name__}: {exc}")
+        _print_debug_traceback()
         return 2
     finally:
         if connection is not None:
@@ -167,6 +169,20 @@ def main(argv: list[str] | None = None) -> int:
                 connection.close()
             except Exception:  # pragma: no cover - 关闭失败不影响退出码
                 pass
+
+
+def _print_debug_traceback() -> None:
+    """JOB_ANALYSIS_DEBUG=1 时打印完整堆栈。
+
+    默认不打印：正常使用只需要一行可读错误；排查（尤其是只能在 CI 上复现的
+    数据库方言问题）时，堆栈里的 SQL 语句和参数才是关键信息。
+    """
+    if os.environ.get("JOB_ANALYSIS_DEBUG") not in {"1", "true", "True", "yes"}:
+        return
+    import traceback
+
+    print("---- 调试堆栈（JOB_ANALYSIS_DEBUG=1）----")
+    traceback.print_exc()
 
 
 if __name__ == "__main__":

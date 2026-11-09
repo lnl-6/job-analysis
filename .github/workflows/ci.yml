@@ -131,10 +131,20 @@ jobs:
       # 装载脚本自己会引导 schema（等价于 mysql < sql/00_schema.sql 与 01_views.sql），
       # 顺便验证了「把 .sql 脚本切成单条语句」这段逻辑在真实 250 行脚本上可用。
       - name: 装载进 MySQL + 阻断式门禁
+        env:
+          JOB_ANALYSIS_DEBUG: "1"
         run: |
+          set +e
           python scripts/load_to_mysql.py \
             --backend mysql --host 127.0.0.1 --user root --password employment \
-            --database employment_analysis
+            --database employment_analysis 2>&1 | tee /tmp/mysql_load.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            # 失败时把错误行做成注解：注解可以直接从 API 匿名读取，不需要登录网页看日志
+            tail -n 25 /tmp/mysql_load.log | sed 's/%/%25/g' | sed 's/\r//g' \
+              | while IFS= read -r line; do echo "::error::$line"; done
+          fi
+          exit "$code"
 
       - name: 逐个执行查询文件（证明这套 SQL 在 MySQL 8 上真能跑）
         run: |
