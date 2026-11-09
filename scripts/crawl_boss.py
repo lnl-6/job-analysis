@@ -54,7 +54,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator, Sequence
+from typing import Any, Sequence
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
