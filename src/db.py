@@ -131,8 +131,10 @@ class _SqliteConnection:
         self.conn = sqlite3.connect(self.path)
         self.conn.execute("PRAGMA foreign_keys = ON")
 
-    def execute(self, sql: str, params: Sequence[Any] = ()) -> Any:
-        return self.conn.execute(sql, params)
+    def execute(self, sql: str, params: Sequence[Any] | None = None) -> Any:
+        if params:
+            return self.conn.execute(sql, params)
+        return self.conn.execute(sql)
 
     def executemany(self, sql: str, rows: Iterable[Sequence[Any]]) -> None:
         self.conn.executemany(sql, list(rows))
@@ -176,9 +178,15 @@ class _MySqlConnection:
         self.options = options
         self.conn = pymysql.connect(**options)
 
-    def execute(self, sql: str, params: Sequence[Any] = ()) -> Any:
+    def execute(self, sql: str, params: Sequence[Any] | None = None) -> Any:
         cursor = self.conn.cursor()
-        cursor.execute(sql, params)
+        # 只在真的有参数时走 PyMySQL 的 % 占位符格式化：
+        # 否则 SQL 里的字面量 %（例如「缺失率超过 10%」）会被当成格式符，
+        # 在 MySQL 上报 unsupported format character，而在 SQLite 上却正常。
+        if params:
+            cursor.execute(sql, params)
+        else:
+            cursor.execute(sql)
         return cursor
 
     def executemany(self, sql: str, rows: Iterable[Sequence[Any]]) -> None:
