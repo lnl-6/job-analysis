@@ -1,0 +1,33 @@
+# 项目元信息与工具配置（依赖清单在 requirements.txt / requirements-dev.txt）
+[project]
+name = "job-analysis"
+version = "2.0.0"
+description = "大学生就业数据分析：可复现的分析流水线 + 统计推断层 + MySQL 数据层 + BI 呈现层"
+readme = "README.md"
+requires-python = ">=3.10"
+
+# ---------------------------------------------------------------------------
+# 测试
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"
+
+# ---------------------------------------------------------------------------
+# 静态检查：只启用「确定是问题」的规则（未使用导入、未定义名称、语法错误等）。
+# 行宽、引号、导入排序这类风格规则不在这里强制 —— 评审注意力应该留给结论与口径，
+# 而不是格式；真要统一风格，行宽等规则应当由团队单独约定后一次性格式化。
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+exclude = ["legacy", "output", ".mplcache", "job-*"]
+
+[tool.ruff.lint]
+select = ["E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# 测试与脚本需要在导入前把仓库根目录加进 sys.path
+"tests/*" = ["E402"]
+"scripts/*" = ["E402"]

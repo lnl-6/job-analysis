@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: 测试 + 全流程（Python ${{ matrix.python-version }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements-dev.txt
+
+      - name: 静态检查（未使用导入 / 未定义名称等）
+        run: ruff check .
+
+      - name: 运行测试（分析流水线，不依赖 pytest）
+        run: python tests/test_pipeline.py
+
+      - name: 运行测试（SQL 数据层，SQLite 镜像后端）
+        run: python tests/test_sql_layer.py
+
+      - name: 运行测试（pytest）
+        run: pytest -q tests/
+
+      - name: 数据文件自检
+        run: python main.py --check-data
+
+      - name: null 场景校准（按定义无分组效应的对照数据也要跑通）
+        run: |
+          python scripts/generate_demo_data.py --scenario null --rows 800 --seed 11 --out /tmp/demo_null.csv
+          python main.py --data /tmp/demo_null.csv --no-charts
+          test -f output/report.md
+          grep -q "判定" output/report.md
+          echo "null 场景校准通过"
+
+      - name: 跑完整分析（含图表，专业取前 8）
+        run: python main.py --top 8
+
+      - name: 校验产物与报告标题随 --top 变化
+        run: |
+          test -f output/report.md
+          test -f output/09_专业城市_薪资热力图.png
+          grep -q "薪资前 8" output/report.md
+          echo "产物与标题校验通过"
+
+      - name: GBK 控制台回归（等价于 Windows 中文控制台）
+        run: PYTHONIOENCODING=gbk python main.py --top 8
+
+      - name: 校验报告溯源与统计输出
+        run: |
+          test -f output/report.md
+          grep -q "都是本次运行从数据里算出来的" output/report.md
+          grep -q "Welch" output/report.md
+          grep -q "不含任何预测内容" output/report.md
+          grep -q "95% 置信区间" output/report.md
+          echo "报告溯源与统计输出校验通过"
+
+      - name: SQL 数据层端到端（SQLite 镜像装载 + 门禁 + 查询）
+        run: |
+          python scripts/load_to_mysql.py --query 03_pareto_distribution
+          test -f output/employment_analysis.db
+          python scripts/load_to_mysql.py --checks-only
+          echo "SQLite 镜像装载与门禁通过"
+
+      - name: 数据源适配层测试（Boss 岗位数据，离线样例）
+        run: python tests/test_source_boss.py
+
+      - name: Boss 样例 → 分析数据集 → 报告（离线端到端）
+        run: |
+          python -m src.sources.boss --raw data/raw/sample/boss_jobs_sample.jsonl \
+              --out "/tmp/boss_岗位数据集.csv"
+          python main.py --data "/tmp/boss_岗位数据集.csv" --no-charts
+          grep -q "数据口径" output/report.md
+          grep -q "岗位薪资区间中值" output/report.md
+          echo "Boss 数据源端到端通过"
+
+      - name: 上传报告产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-py${{ matrix.python-version }}
+          path: output/
+          if-no-files-found: error
+
+  mysql:
+    name: MySQL 8 数据层（service container）
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: employment
+          MYSQL_DATABASE: employment_analysis
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pemployment"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements-dev.txt
+
+      # 装载脚本自己会引导 schema（等价于 mysql < sql/00_schema.sql 与 01_views.sql），
+      # 顺便验证了「把 .sql 脚本切成单条语句」这段逻辑在真实 250 行脚本上可用。
+      - name: 装载进 MySQL + 阻断式门禁
+        run: |
+          python scripts/load_to_mysql.py \
+            --backend mysql --host 127.0.0.1 --user root --password employment \
+            --database employment_analysis
+
+      - name: 逐个执行查询文件（证明这套 SQL 在 MySQL 8 上真能跑）
+        run: |
+          set -e
+          for query in 01_top_n_cities_by_major 02_salary_percentiles_cross_check \
+                       03_pareto_distribution 04_group_vs_overall 05_major_city_pivot; do
+            echo "=== $query"
+            python scripts/load_to_mysql.py \
+              --backend mysql --host 127.0.0.1 --user root --password employment \
+              --checks-only --query "$query" | tail -n 6
+          done
+
+      - name: 门禁复检（阻断级违规必须为 0）
+        run: |
+          python scripts/load_to_mysql.py \
+            --backend mysql --host 127.0.0.1 --user root --password employment \
+            --checks-only

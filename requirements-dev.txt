@@ -1,0 +1,9 @@
+# 开发 / 测试 / CI 依赖
+# 安装：pip install -r requirements-dev.txt
+-r requirements.txt
+
+# 测试框架（tests/ 下的测试支持直接 python 运行，也支持 pytest）
+pytest>=7.0
+
+# 静态检查（只查「确定是问题」的规则，见 pyproject.toml 的 [tool.ruff.lint]）
+ruff>=0.6

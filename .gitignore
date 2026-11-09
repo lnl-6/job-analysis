@@ -1,0 +1,52 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---- 测试/覆盖率/静态检查缓存 ----
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- 本机配置（数据库密码等）----
+.env
+
+# ---- 输出产物（图表/报告/本地数据库不入库）----
+# 注意：README 引用的图在 docs/images/，那一份是要入库的
+output/*.png
+output/*.md
+output/*.db
+!output/.gitkeep
+
+# ---- 真实数据：只留本地，不入库 ----
+# 仓库里带的是 demo_*.csv（合成演示数据）；真实数据放这里后 main.py 会自动优先使用，
+# 但不要提交（可能有版权/隐私问题）。若要连数据一起发布，删掉下面这行并确认可再分发。
+data/raw/大学生就业数据.csv
+
+# ---- 抓取产物：Boss 直聘原始 JSONL 与转换后的数据集，不入库 ----
+# 原始响应体量可能很大、内容属于站点；仓库里只保留 data/raw/sample/ 下的手工样例。
+data/raw/boss/
+data/raw/boss_岗位数据集.csv
+
+# ---- matplotlib 缓存（若设置 MPLCONFIGDIR 到项目内）----
+.mplcache/
+
+# ---- 本地上传包（用 git clone --no-hardlinks . job-analysis 导出的副本）----
+# 它是仓库的副本，不是源码；不排除的话 git add -A 会把整份副本吸进下一次提交。
+# 旧名字的导出目录（job-market-breakdown/）若还留在本地，也可以直接删掉。
+job-analysis/
+job-market-breakdown/
+
+# ---- 编辑器 ----
+.vscode/
+.idea/
+.DS_Store
+
+# ---- 参考项目（别人的爬虫项目副本，只在本地做对照研究，绝不入库）----
+bosszp-master/
+bosszp-selenium-master/
+Boss_zhipin_spider-master/
