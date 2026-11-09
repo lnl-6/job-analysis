@@ -148,7 +148,7 @@ jobs:
 
       - name: 逐个执行查询文件（证明这套 SQL 在 MySQL 8 上真能跑）
         run: |
-          set -e
+          set -eo pipefail
           for query in 01_top_n_cities_by_major 02_salary_percentiles_cross_check \
                        03_pareto_distribution 04_group_vs_overall 05_major_city_pivot; do
             echo "=== $query"
