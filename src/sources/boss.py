@@ -189,12 +189,13 @@ def parse_salary(text: Any) -> SalaryRange:
         return SalaryRange(raw=raw, lower=None, upper=None, months=months, unit=unit)
 
     # 逐个数字配单位：没有自带单位时沿用最近一次出现的单位；都没有则按「元」处理
+    # 区间里常常只有一个数字带单位（「15-25K」= 15000~25000 元），
+    # 所以先用任意一个显式单位作为整段默认单位；整个字符串都没有单位才按「元」。
+    explicit = [suffix for _, suffix in tokens if suffix]
+    fallback = explicit[0] if explicit else "元"
     values: list[float] = []
-    last_unit = "元"
     for number, suffix in tokens:
-        if suffix:
-            last_unit = suffix
-        values.append(float(number) * _UNIT_VALUE.get(last_unit, 1))
+        values.append(float(number) * _UNIT_VALUE.get(suffix or fallback, 1))
 
     # 日薪 / 时薪 → 折算月薪（口径写进 docs/data_source_boss.md）
     if unit == "day":

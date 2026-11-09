@@ -172,7 +172,8 @@ def test_crawl_cache_roundtrip() -> None:
         crawl_boss.append_record(path, payload)  # 重复写一行，job id 去重靠调用方
 
         pages, job_ids, records = crawl_boss.load_cache(path)
-        assert ("数据分析", "101010100", 1) in pages
+        # 多轮采集下「这页抓过没有」必须带轮次：(round, query, city_code, page)
+        assert (1, "数据分析", "101010100", 1) in pages
         assert job_ids == {"cache-1"}
         assert len(records) == 2
         assert json.loads(path.read_text(encoding="utf-8").splitlines()[0])["job"]["encryptJobId"] == "cache-1"
