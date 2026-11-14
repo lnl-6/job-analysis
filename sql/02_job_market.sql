@@ -133,7 +133,7 @@ SELECT
   SUM(CASE WHEN p.salary_mid IS NOT NULL THEN 1 ELSE 0 END)          AS jobs_with_salary,
   ROUND(100.0 * SUM(CASE WHEN p.salary_mid IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 2)
                                                                     AS salary_parse_pct,
-  COUNT(*) FILTER (WHERE p.detail_status = 'ok')                    AS jobs_with_detail,
+  SUM(CASE WHEN p.detail_status = 'ok' THEN 1 ELSE 0 END)           AS jobs_with_detail,
   MIN(p.publish_date)                                               AS publish_from,
   MAX(p.publish_date)                                               AS publish_to
 FROM dwd_job_posting p
