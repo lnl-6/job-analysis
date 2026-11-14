@@ -58,6 +58,7 @@ python main.py --data data/raw/大学生就业数据.csv    # 想用问卷 CSV �
 python tests/test_pipeline.py      # 27 项：分析内核
 python tests/test_sql_layer.py     # 11 项：SQL 数据层（用 SQLite 镜像，无需 MySQL）
 python tests/test_source_boss.py   # 18 项：Boss 岗位数据适配层（离线样例，不联网）
+python tests/test_published_summary.py  # 3 项：公开聚合表不含岗位级字段 / 遵守样本量门槛 / 覆盖全部口径
 pytest -q tests/
 
 # 5.（可选）装载进数据层并跑门禁与查询
@@ -116,6 +117,38 @@ python gui.py
 
 > **数据来源、样本量、采集时间请务必登记在 `data/README.md` 中。**
 > 没有来源标注的数据，结论不可信、也不可被引用——本仓库自带的只是合成演示数据。
+
+### 数据来源与合规
+
+本项目的分析数据是**项目自带爬虫自行抓取**的公开数据，不是下载的现成数据集：
+
+| 项 | 值 |
+| --- | --- |
+| 数据源 | 现场抓取 [Boss 直聘](https://www.zhipin.com)「数据分析」岗位搜索结果页 |
+| 采集时间 | 2026-11-14（单日快照） |
+| 规模 | 2021 条原始记录 × 47 个城市；适配并清洗后 **1864 条**进入分析 |
+| 采集方式 | `scripts/crawl_boss.py`：单关键词、分城市分页、每请求间隔 20s（低频）、遇到验证码即停止并保留已抓数据 |
+| 不采集的内容 | 招聘者姓名/联系方式等个人信息（抓取器只保留 `KEEP_FIELDS` 白名单里的岗位字段） |
+| 数据指纹 | `2e56b3254888`（SHA-256 前 12 位，与报告「本次运行信息」一致） |
+| 用途声明 | 仅用于学习与技术演示；数据版权归原站点所有 |
+
+**哪些数据进了仓库、哪些留在本地**
+
+| 位置 | 内容 | 入库 |
+| --- | --- | --- |
+| `data/raw/boss/raw_jobs.jsonl`、`data/raw/boss_岗位数据集.csv` | 原始抓取记录 + 适配后的分析数据（含公司名、单条岗位） | ❌ 本地保留（`.gitignore`） |
+| `data/published/boss_market_summary.csv` | 上述数据的**聚合统计**：78 行（城市 / 城市层级 / 专业 / 学历 / 去向 / 城市×专业），只含样本量与薪资分布 | ✅ 入库 |
+| `data/raw/sample/boss_jobs_sample.jsonl` | 29 行手工样例，仅作测试夹具 | ✅ 入库 |
+| `data/raw/demo_大学生就业数据.csv` | 1200 行合成演示数据（问卷口径），用于离线跑通与 CI | ✅ 入库 |
+
+原始抓取数据属于站点内容且会随抓取批次增长，不适合放进 Git 历史；但仓库仍然要能证明
+「分析跑在真实数据上」，所以发布聚合量。字段说明见 [`data/published/README.md`](data/published/README.md)。
+
+重新生成聚合表（需要本地已有 `data/raw/boss_岗位数据集.csv`）：
+
+```bash
+python scripts/export_published_summary.py   # 或 make publish
+```
 
 ### 默认数据源：Boss 直聘岗位数据
 
@@ -458,7 +491,7 @@ PYTHONIOENCODING=gbk python main.py --top 8
 ## 十、待办
 
 - [ ] 填入真实数据与来源说明（`data/README.md`）——**这是目前最大的短板**：真实数据到位，报告才有现实意义（当前真实数据只放本地，未入库）
-- [x] 补充 `tests/`：清洗不变量（含无效薪资剔除）/ 统计性质 / 样本量门槛 / 数据质量体检 / Holm 校正 / null 场景校准 / README 无预置数字（现 56 项 = 分析内核 27 + SQL 数据层 11 + 数据源适配 18）
+- [x] 补充 `tests/`：清洗不变量（含无效薪资剔除）/ 统计性质 / 样本量门槛 / 数据质量体检 / Holm 校正 / null 场景校准 / README 无预置数字 / 公开聚合表无岗位级字段（现 59 项 = 分析内核 27 + SQL 数据层 11 + 数据源适配 18 + 公开聚合表 3）
 - [x] 数据源扩展：Boss 直聘岗位数据（低频可断点续抓脚本 + 口径适配层：7 列口径契约 + 25 列扩展字段（含经验/规模序数、薪资带宽、发布时间、JD 长度）、6 个岗位方向归类、5 类薪资格式解析、详情页 JD 抓取、采集 manifest、手工样例 + 18 项离线测试 + 口径文档 + 多轮/多城市叠加采集）
 - [x] 增加「专业 × 城市」交叉分析，并对样本不足的组合留空、样本量另表列出
 - [x] 统计推断层 `src/stats.py`：95% 置信区间 + Welch t 检验 + Mann-Whitney U + Cohen's d + Holm 多重比较校正
