@@ -105,6 +105,43 @@ SELECT 'ods_missing_gender_over_10pct', '提示',
 
 UNION ALL
 SELECT 'ods_duplicate_respondent_id', '提示',
-       (SELECT COUNT(*) - COUNT(DISTINCT respondent_id) FROM ods_employment_survey
-         WHERE load_batch = (SELECT load_batch FROM v_latest_run)),
-       '最新一次装载里问卷编号重复数量（真实问卷数据常见，仅提示）';
+       (SELECT COUNT(*) FROM ods_employment_survey
+         WHERE load_batch = (SELECT load_batch FROM v_latest_run)
+           AND respondent_id IS NOT NULL)
+       - (SELECT COUNT(DISTINCT respondent_id) FROM ods_employment_survey
+           WHERE load_batch = (SELECT load_batch FROM v_latest_run)),
+       '最新一次装载里问卷编号重复数量（真实问卷数据常见，仅提示；没有编号列时计 0）'
+
+UNION ALL
+SELECT 'job_positive_salary', '阻断',
+       (SELECT COUNT(*) FROM dwd_job_posting
+         WHERE run_id = (SELECT run_id FROM v_latest_run)
+           AND salary_mid IS NOT NULL AND salary_mid <= 0),
+       '岗位薪资中值必须 > 0（解析出来的负值只可能是解析错误）'
+
+UNION ALL
+SELECT 'job_salary_parse_coverage', '提示',
+       CASE
+         WHEN (SELECT COUNT(*) FROM dwd_job_posting
+                WHERE run_id = (SELECT run_id FROM v_latest_run)) = 0 THEN 0
+         WHEN (SELECT COUNT(*) FROM dwd_job_posting
+                WHERE run_id = (SELECT run_id FROM v_latest_run) AND salary_mid IS NULL) * 100.0
+              / (SELECT COUNT(*) FROM dwd_job_posting
+                  WHERE run_id = (SELECT run_id FROM v_latest_run)) > 20 THEN 1
+         ELSE 0
+       END,
+       '最新一次装载里岗位薪资解析失败率超过 20% 时提示（解析规则可能跟不上平台的新写法）'
+
+UNION ALL
+SELECT 'job_skill_orphan', '阻断',
+       (SELECT COUNT(*) FROM dwd_job_skill js
+          LEFT JOIN dwd_job_posting p ON p.job_id = js.job_id
+         WHERE p.job_id IS NULL),
+       '技能桥表不允许出现找不到岗位的孤儿记录'
+
+UNION ALL
+SELECT 'job_rank_out_of_range', '阻断',
+       (SELECT COUNT(*) FROM dwd_job_posting
+         WHERE run_id = (SELECT run_id FROM v_latest_run)
+           AND (experience_rank NOT BETWEEN 0 AND 9 OR company_size_rank NOT BETWEEN 0 AND 9)),
+       '序数列只允许 0~5（有效档位）或 9（不限/未知）';

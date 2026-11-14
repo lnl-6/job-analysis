@@ -45,6 +45,9 @@ SQLITE_SCHEMA = SQL_DIR / "schema_sqlite.sql"
 VIEWS_SQL = SQL_DIR / "01_views.sql"
 CHECKS_SQL = SQL_DIR / "quality_checks.sql"
 QUERY_DIR = SQL_DIR / "queries"
+# 岗位市场层（Boss 数据源）的扩展 schema：依赖 dim_city / dim_industry，所以在基础 schema 之后执行
+JOB_SCHEMA_SQL = SQL_DIR / "02_job_market.sql"
+JOB_SCHEMA_SQLITE = SQL_DIR / "schema_job_sqlite.sql"
 
 BACKENDS = ("mysql", "sqlite")
 
@@ -230,8 +233,14 @@ def connect(backend: str = "sqlite", **kwargs: Any) -> Any:
 
 def ensure_schema(conn: Any) -> None:
     """引导 schema 与视图（可重复执行：脚本里都是 DROP ... IF EXISTS + CREATE）。"""
-    conn.executescript(MYSQL_SCHEMA if conn.backend == "mysql" else SQLITE_SCHEMA)
+    is_mysql = conn.backend == "mysql"
+    conn.executescript(MYSQL_SCHEMA if is_mysql else SQLITE_SCHEMA)
     conn.executescript(VIEWS_SQL)
+    # 岗位市场层单独一份脚本（依赖 dim_city / dim_industry）；文件不存在时跳过，
+    # 这样只关心问卷链路的人（或旧仓库副本）不会被它卡住。
+    job_schema = JOB_SCHEMA_SQL if is_mysql else JOB_SCHEMA_SQLITE
+    if job_schema.exists():
+        conn.executescript(job_schema)
     conn.commit()
 
 
@@ -801,6 +810,265 @@ def _load_weight_sensitivity(conn: Any, results: dict[str, Any], run_id: str) ->
 # =============================================================================
 # 对外接口
 # =============================================================================
+# =============================================================================
+# 岗位市场层（Boss 数据源）：ODS → 维表 → 事实 → 多值桥表
+# =============================================================================
+#: 岗位扩展字段（与 src/sources/boss.py 的 EXTRA_COLUMNS 同名）
+JOB_LAYER_FIELDS = (
+    "job_id",
+    "job_title",
+    "company",
+    "industry",
+    "finance_stage",
+    "company_size",
+    "experience_required",
+    "experience_rank",
+    "company_size_rank",
+    "job_type",
+    "salary_lower",
+    "salary_upper",
+    "salary_months",
+    "salary_unit",
+    "salary_band_ratio",
+    "publish_date",
+    "city_district",
+    "business_district",
+    "welfare",
+    "skills",
+    "jd_text",
+    "jd_len",
+    "detail_status",
+    "source",
+    "crawled_at",
+)
+
+ODS_JOB_COLUMNS = (
+    "run_id",
+    "source_row_no",
+    "job_id",
+    "payload_json",
+    "source",
+    "crawled_at",
+    "load_batch",
+)
+
+JOB_POSTING_COLUMNS = (
+    "job_id",
+    "run_id",
+    "job_title",
+    "company_key",
+    "city_key",
+    "industry_key",
+    "job_type",
+    "experience_rank",
+    "company_size_rank",
+    "salary_lower",
+    "salary_upper",
+    "salary_months",
+    "salary_unit",
+    "salary_mid",
+    "salary_band_ratio",
+    "publish_date",
+    "first_seen_at",
+    "last_seen_at",
+    "crawled_at",
+    "detail_status",
+    "jd_len",
+)
+
+
+def has_job_layer(frame: pd.DataFrame) -> bool:
+    """这份数据是不是岗位数据源（有 job_id 列即视为岗位数据）。
+
+    问卷数据没有 job_id，所以岗位层对问卷链路完全透明 —— 装载流程不需要
+    调用方传开关，也不会因为岗位表为空而报错。
+    """
+    return "job_id" in frame.columns
+
+
+def _int_or_none(value: Any) -> int | None:
+    number = _num_or_none(value)
+    return None if number is None else int(number)
+
+
+def _rank_or_unknown(value: Any) -> int:
+    """序数列是 NOT NULL：缺失时用 9（=不可排序），而不是 0。"""
+    number = _num_or_none(value)
+    return 9 if number is None else int(number)
+
+
+def _date_or_none(value: Any) -> str | None:
+    text = _text_or_none(value)
+    if not text:
+        return None
+    return text[:10]
+
+
+def _json_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, float) and pd.isna(value):
+        return None
+    if isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)
+
+
+def _split_values(value: Any) -> list[str]:
+    """「五险一金|双休」→ ['五险一金', '双休']（去空、去重、保序）。"""
+    text = _text_or_none(value)
+    if not text:
+        return []
+    parts = [part.strip() for part in text.replace("，", ",").replace("|", ",").replace("、", ",").split(",")]
+    result: list[str] = []
+    for part in parts:
+        if part and part not in result:
+            result.append(part)
+    return result
+
+
+def _simple_key_map(conn: Any, table: str, key_column: str, value_column: str) -> dict[str, int]:
+    rows = conn.execute(f"SELECT {value_column}, {key_column} FROM {table}").fetchall()
+    return {str(value): int(key) for value, key in rows}
+
+
+def _load_job_layer(
+    conn: Any,
+    clean: pd.DataFrame,
+    key_map: dict[str, dict[str, int]],
+    run_id: str,
+    load_batch: str,
+) -> dict[str, int]:
+    """装载岗位市场层（幂等：job_id 为主键，重复装载覆盖）。
+
+    顺序不能换：维表 → 事实表 → 桥表（桥表的外键指向事实表）。
+    行业维度沿用 dim_company.industry：岗位本身没有独立行业字段，
+    硬造一个 dim_industry 条目会把问卷口径的行业维表搅浑。
+    """
+    records = clean.to_dict("records")
+    written: dict[str, int] = {}
+
+    # ---- 1) ODS：一条岗位一行 JSON（保真，供追溯；不改字段名）----
+    ods_rows = [
+        (
+            run_id,
+            position,
+            _text_or_none(record.get("job_id")) or "",
+            json.dumps(
+                {
+                    column: _json_value(record.get(column))
+                    for column in JOB_LAYER_FIELDS
+                    if column in clean.columns
+                },
+                ensure_ascii=False,
+            ),
+            _text_or_none(record.get("source")) or "boss",
+            _text_or_none(record.get("crawled_at")),
+            load_batch,
+        )
+        for position, record in enumerate(records, start=1)
+    ]
+    written["ods_job_posting"] = _upsert(
+        conn, "ods_job_posting", ODS_JOB_COLUMNS, ("run_id", "source_row_no"), ods_rows
+    )
+
+    # ---- 2) 维表：公司 / 技能（技能是多值字段，必须先拆）----
+    companies: dict[str, tuple[str | None, str | None, str | None]] = {}
+    skills: list[str] = []
+    skill_links: list[tuple[str, str]] = []
+    welfare_links: list[tuple[str, str]] = []
+
+    for record in records:
+        job_id = _text_or_none(record.get("job_id"))
+        if not job_id:
+            continue
+        company = _text_or_none(record.get("company"))
+        if company and company not in companies:
+            companies[company] = (
+                _text_or_none(record.get("industry")),
+                _text_or_none(record.get("finance_stage")),
+                _text_or_none(record.get("company_size")),
+            )
+        for skill in _split_values(record.get("skills")):
+            skill = skill[:64]
+            if skill not in skills:
+                skills.append(skill)
+            skill_links.append((job_id, skill))
+        for welfare in _split_values(record.get("welfare")):
+            welfare_links.append((job_id, welfare[:64]))
+
+    if companies:
+        written["dim_company"] = _upsert(
+            conn,
+            "dim_company",
+            ("company_name", "industry", "finance_stage", "company_size"),
+            ("company_name",),
+            [(name, *rest) for name, rest in companies.items()],
+        )
+    if skills:
+        written["dim_skill"] = _upsert(
+            conn, "dim_skill", ("skill",), ("skill",), [(skill,) for skill in skills]
+        )
+    conn.commit()  # 维表先落库，下面查代理键才看得到
+
+    # ---- 3) 事实表：一岗一行 ----
+    company_keys = _simple_key_map(conn, "dim_company", "company_key", "company_name")
+    skill_keys = _simple_key_map(conn, "dim_skill", "skill_key", "skill")
+    city_keys = key_map.get(config.COL_CITY, {})
+
+    posting_rows: list[tuple[Any, ...]] = []
+    for record in records:
+        job_id = _text_or_none(record.get("job_id"))
+        if not job_id:
+            continue
+        crawled_at = _text_or_none(record.get("crawled_at"))
+        posting_rows.append(
+            (
+                job_id,
+                run_id,
+                _text_or_none(record.get("job_title")),
+                company_keys.get(_text_or_none(record.get("company")) or ""),
+                city_keys.get(_text_or_none(record.get(config.COL_CITY)) or ""),
+                None,  # 行业走 dim_company.industry
+                _text_or_none(record.get("job_type")),
+                _rank_or_unknown(record.get("experience_rank")),
+                _rank_or_unknown(record.get("company_size_rank")),
+                _num_or_none(record.get("salary_lower")),
+                _num_or_none(record.get("salary_upper")),
+                _int_or_none(record.get("salary_months")),
+                _text_or_none(record.get("salary_unit")),
+                _num_or_none(record.get(config.COL_SALARY)),
+                _num_or_none(record.get("salary_band_ratio")),
+                _date_or_none(record.get("publish_date")),
+                crawled_at,  # first_seen_at
+                crawled_at,  # last_seen_at
+                crawled_at,
+                _text_or_none(record.get("detail_status")) or "none",
+                _int_or_none(record.get("jd_len")),
+            )
+        )
+    written["dwd_job_posting"] = _upsert(
+        conn, "dwd_job_posting", JOB_POSTING_COLUMNS, ("job_id",), posting_rows
+    )
+
+    # ---- 4) 多值桥表（没有非键列 → 存在即忽略，重复装载不会产生重复行）----
+    written["dwd_job_skill"] = _upsert(
+        conn,
+        "dwd_job_skill",
+        ("job_id", "skill_key"),
+        ("job_id", "skill_key"),
+        [(job_id, skill_keys[skill]) for job_id, skill in skill_links if skill in skill_keys],
+    )
+    written["dwd_job_welfare"] = _upsert(
+        conn,
+        "dwd_job_welfare",
+        ("job_id", "welfare"),
+        ("job_id", "welfare"),
+        welfare_links,
+    )
+    return written
+
+
 def load_run(
     raw: pd.DataFrame,
     clean: pd.DataFrame,
@@ -846,6 +1114,8 @@ def load_run(
 
         key_map = _dimension_key_map(conn)
         written["dwd_survey_clean"] = _load_dwd(conn, raw, clean, fingerprint, key_map)
+        if has_job_layer(clean):
+            written.update(_load_job_layer(conn, clean, key_map, run_id, fingerprint))
         written["ads_run_meta"] = _load_run_meta(
             conn, info, raw, clean, cleaning, run_id, fingerprint
         )

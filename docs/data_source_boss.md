@@ -169,6 +169,25 @@ python main.py --data "data/raw/boss_岗位数据集.csv"
 
 ---
 
+### 6.1 详情页 JD、发布时间与采集清单
+
+参考项目的详情抓取是「每条岗位一个请求、没有延迟、失败就跳过」，这里把它做成可控的一步：
+
+| 能力 | 开启方式 | 产物 | 失败分类 |
+| --- | --- | --- | --- |
+| JD 正文 | `--with-detail` | 原始 JSONL 里的 `jobDescription`；适配层落到 `jd_text` / `jd_len` / `detail_status` | `ok` / `empty` / `verify` / `404` / `403` / `error` |
+| 发布时间 | 默认（字段已在白名单） | `publish_date`（`YYYY-MM-DD`） | 解析不出就留空，不推断 |
+| 采集清单 | 默认 | `<raw 同名>.manifest.json`（轮次、页数、统计、退出码、时间） | — |
+| 多值字段 | 默认 | `skills` / `welfare` 规范成 `|` 拼接，入库时拆成桥表行 | — |
+
+规矩：
+
+1. **详情一天最多抓一轮**：`--detail-delay` 默认 0.8s；遇到 `verify`（安全验证）立即停，不做绕验证码的事。
+2. **JD 只存正文**：参考项目把招聘者（`interviewer`）也入库，这里明确不碰任何招聘者个人信息。
+3. **manifest 是溯源的一部分**：抓了多少页、失败多少、什么时候抓的，都要能回答「这批数据是怎么来的」。
+4. 扩展字段的权威清单在 `src/sources/boss.py::EXTRA_COLUMNS`（25 列），数据库侧一一对应
+   `src/db.py::JOB_LAYER_FIELDS`；改一处必须改另一处，`tests/test_source_boss.py::test_map_record_fills_job_market_fields` 会盯着。
+
 ## 7. 已知限制（写在报告里，也是面试时的诚实答案）
 
 1. **样本是「在招岗位快照」，不是就业人口**：`n` 条岗位 ≠ `n` 个人；同一家公司重复发岗会放大权重。
@@ -202,7 +221,34 @@ python main.py --data "data/raw/boss_岗位数据集.csv"
 python -m src.sources.boss --raw data/raw/sample/boss_jobs_sample.jsonl \
     --out "data/raw/boss_岗位数据集.csv"
 python main.py --data "data/raw/boss_岗位数据集.csv"
-python tests/test_source_boss.py          # 10 项离线测试
+python tests/test_source_boss.py          # 18 项离线测试
 ```
 
 样例数据是**手工编造**的（每行带 `"_sample": true`），只用于验证流程与测试，不能当作真实结论。
+
+---
+
+## 10. 默认数据源与「一条命令跑通」
+
+从这一版起，**默认数据源就是 Boss 岗位数据**（不再自动加载问卷 CSV）：
+
+| 候选顺序 | 文件 | 说明 |
+| --- | --- | --- |
+| 1 | `data/raw/boss_岗位数据集.csv` | 本项目自己抓取 + 适配得到的真实岗位数据 |
+| 2 | `data/raw/demo_大学生就业数据.csv` | 合成演示数据，仅离线自测/CI 用 |
+
+问卷 CSV（`data/raw/大学生就业数据.csv`）不参与自动探测，需要时用
+`python main.py --data data/raw/大学生就业数据.csv` 显式指定。
+
+**一条命令跑通（真实抓取 → 分析）：**
+
+```bash
+$env:BOSS_COOKIE = "lastCity=101010100; __zp_stoken__=..."   # 登录后从开发者工具复制
+python scripts/crawl_boss.py --query 数据分析 --city 北京,上海 --rounds 3 --to-csv
+python main.py
+```
+
+`--to-csv` 会调用适配层，把原始 JSONL 直接写成 `data/raw/boss_岗位数据集.csv`；
+`main.py` 不带 `--data` 时默认就分析这份文件。也可以分两步做（先抓、后适配），
+命令见第 6 节。抓取产物与适配数据集都默认不入库（`.gitignore` 已排除），
+仓库里只提交 `data/raw/sample/` 下的手工样例。

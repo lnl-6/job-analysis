@@ -5,7 +5,7 @@
 ```
 data/
 └── raw/
-    ├── 大学生就业数据.csv          # 真实数据（若有；**默认不入库**）
+    ├── 大学生就业数据.csv          # 问卷 CSV（可选，需 --data 显式指定；**默认不入库**）
     ├── demo_大学生就业数据.csv     # 合成演示数据（仓库自带，可直接跑）
     ├── boss_岗位数据集.csv         # Boss 岗位适配后的分析数据集（本地生成，**默认不入库**）
     ├── boss/                       # Boss 抓取的原始 JSONL（本地生成，**默认不入库**）
@@ -45,17 +45,20 @@ data/
 
 `src/loader.py` 的加载顺序：
 
-1. `data/raw/大学生就业数据.csv` —— **真实数据，优先加载**
-2. `data/raw/demo_大学生就业数据.csv` —— 演示数据，兜底
+1. `data/raw/boss_岗位数据集.csv` —— **本项目自己抓取的真实岗位数据，优先加载**
+2. `data/raw/demo_大学生就业数据.csv` —— 合成演示数据，兜底
+
+问卷 CSV（`data/raw/大学生就业数据.csv`）**不参与自动探测**：它是外部放入工作区的数据，
+需要时用 `python main.py --data data/raw/大学生就业数据.csv` 显式指定。
 
 若使用演示数据，程序会在控制台和报告中**显著标注**，避免把演示结论当成真实结论。
 
-## 手动放入真实数据的步骤
+## 手动放入问卷数据的步骤
 
 1. 把 CSV 改名为 `大学生就业数据.csv`
 2. 放到 `data/raw/` 目录下
-3. 运行 `python main.py --check-data` 确认列名和类型没问题
-4. 运行 `python main.py` 出报告
+3. 运行 `python main.py --data data/raw/大学生就业数据.csv --check-data` 确认列名和类型没问题
+4. 运行 `python main.py --data data/raw/大学生就业数据.csv` 出报告
 
 ## 关于 demo 数据
 
@@ -121,10 +124,12 @@ python scripts/generate_demo_data.py --show-params --scenario null
   python -m src.sources.boss --raw data/raw/sample/boss_jobs_sample.jsonl \
       --out "data/raw/boss_岗位数据集.csv"
   python main.py --data "data/raw/boss_岗位数据集.csv"
-  python tests/test_source_boss.py      # 10 项离线测试
+  python tests/test_source_boss.py      # 18 项离线测试
   ```
 
-- **真实抓取**：`$env:BOSS_COOKIE="..."` 后跑 `python scripts/crawl_boss.py --query 数据分析 --city 北京`
+- **真实抓取（默认数据源）**：`$env:BOSS_COOKIE="..."` 后跑
+  `python scripts/crawl_boss.py --query 数据分析 --city 北京 --rounds 3 --to-csv`
+  → 直接产出 `data/raw/boss_岗位数据集.csv`，之后 `python main.py` 分析的就是这份数据
   （低频、礼敬、断点续爬；抓取产物与生成的数据集默认不入库）
 - **样本来源必须登记**：真实抓取的数据属于站点内容，发布仓库时只提交 `sample/` 下的手工样例；
   若确实基于真实抓取结果下结论，请在报告的数据来源里注明采集时间、关键词、城市与页数。

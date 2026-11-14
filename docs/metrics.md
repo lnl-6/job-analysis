@@ -129,6 +129,40 @@ significant = sample_ok 且 p_holm < config.ALPHA（0.05）
 4. **测试守住声明**：`tests/test_source_boss.py::test_sample_dataset_runs_through_pipeline` 断言溯源里出现
    「数据口径」与「岗位薪资区间中值」，删掉声明测试就红。
 
+### 9. 岗位市场专属口径（Boss 数据源）
+
+| 指标 | 定义 | 出处 | 注意 |
+| --- | --- | --- | --- |
+| 岗位薪资中值 `salary_mid` | 解析出的月薪区间取中值；（单边区间取该边；`面议` 等解析不出的为空） | `src/sources/boss.py::parse_salary` → `dwd_job_posting.salary_mid` | 空值**不填充**：岗位薪资解析不出来就是不知道，不能拿中位数硬塞 |
+| 薪资带宽 `salary_band_ratio` | `(上界 − 下界) / 中值` | 同上 → `dwd_job_posting.band_ratio` | 单边区间没有带宽（空），不要当 0 参与统计 |
+| 经验档位 `experience_rank` | 0 在校/应届、1 一年内、2 1-3 年、3 3-5 年、4 5-10 年、5 10 年以上 | `src/sources/boss.py::experience_rank` | **9 = 不限/未知**；按经验做趋势时必须先排除 9 |
+| 公司规模档位 `company_size_rank` | 0 → 0-20 人 …… 5 → 10000 人以上 | `company_size_rank` | 同上，9 = 未知 |
+| 技能需求 | 按 `dwd_job_skill` 计数；同一岗位里的重复技能只算一次 | `dwd_job_skill` / `v_skill_demand` | 需求数是「岗位数」，不是「出现次数」 |
+| 技能溢价 | 带某技能的岗位 vs 不带的岗位，比较薪资中值 | `dwd_job_posting.salary_mid` + `dwd_job_skill` | 仍是观察性比较：沿用样本量门槛 + Holm 校正，**不能写成因果** |
+| 岗位吸引力代理分 | 由福利/融资/规模推出的 0~5 分（`proxy`） | `src/sources/boss.py::attractiveness_score` | **不是满意度**，不能与问卷的满意度混比 |
+| 发布新近度 | `publish_date` 归一到日 | `parse_publish_date` | 解析不出来就留空，不推断「大概多久前」 |
+
+三条额外规矩：
+
+1. 岗位数据里 `专业` 列的含义是**岗位方向**（标题关键词归类），不是所学专业；跨源比较一律禁止。
+2. 岗位数据的 `期望薪资` 是**平台披露的薪资区间中值**，不是受访者期望；口径行必须写清楚。
+3. 岗位市场层的表（`ods_job_posting` / `dwd_job_posting` / `dwd_job_skill` / `dwd_job_welfare` / `dim_company` / `dim_skill`）只在岗位数据装载时才有行；
+   问卷数据装载后它们是空表，门禁里的 4 项岗位检查会自然通过，不要误读成「岗位数据通过校验」。
+
+---
+
+### 10. 默认数据源
+
+| 项 | 值 |
+| --- | --- |
+| 默认数据源 | `data/raw/boss_岗位数据集.csv`（项目自采 Boss 岗位数据） |
+| 兜底 | `data/raw/demo_大学生就业数据.csv`（合成演示数据，仅离线自测/CI） |
+| 问卷 CSV | 不自动加载；用 `python main.py --data data/raw/大学生就业数据.csv` |
+
+规矩：默认数据源必须能由仓库内的脚本复现（抓取 `scripts/crawl_boss.py` → 适配
+`src/sources/boss.py` 两步都在仓库里）；外部塞进来的数据只能显式指定，
+否则「这份报告到底基于什么数据」就答不上来。
+
 ---
 
 ## 三、改口径的规矩

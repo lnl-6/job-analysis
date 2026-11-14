@@ -179,6 +179,130 @@ def test_crawl_cache_roundtrip() -> None:
         assert json.loads(path.read_text(encoding="utf-8").splitlines()[0])["job"]["encryptJobId"] == "cache-1"
 
 
+# ---------------------------------------------------------------------------
+# 序数化 / 薪资带宽 / 发布时间 / 多值字段 / 详情页
+# ---------------------------------------------------------------------------
+def test_experience_and_size_rank() -> None:
+    """经验与规模都要映射成可排序的序数；「不限」和未知档位给 9，不能悄悄变成 0。"""
+    assert boss.experience_rank("在校/应届") == 0
+    assert boss.experience_rank("3-5年") == 3
+    assert boss.experience_rank("10年以上") == 5
+    assert boss.experience_rank("经验不限") == 9
+    assert boss.experience_rank(None) == 9
+    assert boss.experience_rank("没出现过的新档位") == 9
+
+    assert boss.company_size_rank("0-20人") == 0
+    assert boss.company_size_rank("100-499人") == 2
+    assert boss.company_size_rank("1000-9999人") == 4
+    assert boss.company_size_rank("10000人以上") == 5
+    assert boss.company_size_rank("") == 9
+
+
+def test_salary_band_ratio() -> None:
+    """薪资带宽 =（上界-下界）/中值；单边或解析失败时没有带宽。"""
+    assert boss.salary_band_ratio(boss.parse_salary("15-25K")) == 0.5
+    assert boss.salary_band_ratio(boss.parse_salary("20K以上")) is None
+    assert boss.salary_band_ratio(boss.parse_salary("面议")) is None
+
+
+def test_parse_publish_date_forms() -> None:
+    """发布时间：时间戳 / 标准日期 / 相对时间都能归一；推不出来就返回 None（不猜）。"""
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    stamp = datetime.fromtimestamp(1_700_000_000)
+
+    assert boss.parse_publish_date("2025-05-23") == "2025-05-23"
+    assert boss.parse_publish_date("2025/5/23") == "2025-05-23"
+    assert boss.parse_publish_date("1700000000000") == stamp.strftime("%Y-%m-%d")
+    assert boss.parse_publish_date("1700000000") == stamp.strftime("%Y-%m-%d")
+    assert boss.parse_publish_date("今天") == today
+    assert boss.parse_publish_date("昨天") == (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    assert boss.parse_publish_date(f"发布于 {now.month}月{now.day}日") == today
+    assert boss.parse_publish_date("三周前") is None
+    assert boss.parse_publish_date(None) is None
+
+
+def test_split_multi_values() -> None:
+    """多值字段先规范成「|」拼接，再拆成列表（去空、去重、保序）。"""
+    assert boss.split_multi("五险一金|双休|年终奖") == ["五险一金", "双休", "年终奖"]
+    assert boss.split_multi("Python，SQL、Python") == ["Python", "SQL"]
+    assert boss.split_multi("") == []
+    assert boss.split_multi(None) == []
+
+
+def test_map_record_fills_job_market_fields() -> None:
+    """适配层必须把库与分析要用的扩展列都填上，且列名覆盖 EXTRA_COLUMNS。"""
+    record = {
+        "crawled_at": "2026-11-09 10:00:00",
+        "job": {
+            "encryptJobId": "job-x",
+            "jobName": "数据分析师",
+            "salaryDesc": "15-25K·13薪",
+            "jobDegree": "本科",
+            "jobExperience": "3-5年",
+            "brandName": "某公司",
+            "brandIndustry": "互联网",
+            "brandStageName": "B轮",
+            "brandScaleName": "100-499人",
+            "cityName": "广州",
+            "welfareList": ["五险一金", "双休"],
+            "skills": ["Python", "SQL"],
+            "jobTime": "2026-11-01",
+        },
+    }
+    row = boss.map_record(record)
+
+    assert set(boss.EXTRA_COLUMNS) <= set(row)
+    assert row["experience_rank"] == 3
+    assert row["company_size_rank"] == 2
+    assert row["salary_band_ratio"] == 0.5
+    assert row["publish_date"] == "2026-11-01"
+    assert row["detail_status"] == "none"
+    assert row["skills"] == "Python|SQL"
+    assert row["jd_len"] == 0
+
+
+def test_parse_detail_payload_json_and_html() -> None:
+    """详情解析：接口 JSON 与页面 HTML 两条路径都要能取出 JD；取不到给 empty。"""
+    payload = {"zpData": {"jobInfo": {"jobDescription": "负责报表与指标体系建设。"}}}
+    assert crawl_boss.parse_detail_payload(payload) == ("负责报表与指标体系建设。", "ok")
+
+    html = '<div class="job-sec-text">负责<b>数据分析</b>与报表</div>'
+    text, status = crawl_boss.parse_detail_payload(html)
+    assert status == "ok"
+    assert "数据分析" in text
+    assert "<b>" not in text
+
+    assert crawl_boss.parse_detail_payload({"zpData": {}}) == ("", "empty")
+    assert crawl_boss.parse_detail_payload('<div class="x">没有 JD</div>') == ("", "empty")
+
+
+def test_crawl_offline_writes_manifest() -> None:
+    """--offline 也要写采集清单：报告溯源与复现都要靠它。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        raw = Path(tmp) / "raw.jsonl"
+        manifest = Path(tmp) / "manifest.json"
+        args = crawl_boss.parse_args(["--offline", "--out", str(raw), "--manifest", str(manifest)])
+        assert crawl_boss.crawl(args) == 0
+
+        assert manifest.exists()
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        assert payload["source"] == "boss"
+        assert payload["exit_code"] == 0
+        assert set(crawl_boss.STAT_KEYS) <= set(payload["stats"])
+        assert payload["totals"]["records"] == 0
+
+
+def test_default_source_prefers_boss_dataset() -> None:
+    """默认数据源必须是 Boss 抓取产物；问卷 CSV 不在候选里，只能 --data 显式指定。"""
+    candidates = loader.default_data_candidates()
+    assert candidates[0] == config.BOSS_DATA_PATH
+    assert candidates[-1] == config.DEMO_DATA_PATH
+    assert config.REAL_DATA_PATH not in candidates
+
+
 def main() -> int:
     tests = [
         ("薪资：月薪 + 年薪月数", test_parse_salary_monthly_with_months),
@@ -191,6 +315,14 @@ def main() -> int:
         ("按 job_id 去重", test_build_frame_dedups_by_job_id),
         ("样例 → CSV → 分析流水线", test_sample_dataset_runs_through_pipeline),
         ("抓取缓存往返（断点续爬）", test_crawl_cache_roundtrip),
+        ("经验 / 公司规模序数化", test_experience_and_size_rank),
+        ("薪资带宽", test_salary_band_ratio),
+        ("发布时间归一", test_parse_publish_date_forms),
+        ("多值字段拆分", test_split_multi_values),
+        ("扩展列填充（岗位市场字段）", test_map_record_fills_job_market_fields),
+        ("详情页解析（JSON + HTML）", test_parse_detail_payload_json_and_html),
+        ("离线抓取也写 manifest", test_crawl_offline_writes_manifest),
+        ("默认数据源优先 Boss 产物", test_default_source_prefers_boss_dataset),
     ]
 
     failed = 0

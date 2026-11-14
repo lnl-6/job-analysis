@@ -43,17 +43,19 @@ def _console_safe() -> None:
 
 
 def _default_data_path() -> Path:
-    """真实数据优先、演示数据兜底（与 main.py 的规则一致）。"""
-    if config.REAL_DATA_PATH.exists():
-        return config.REAL_DATA_PATH
-    return config.DEMO_DATA_PATH
+    """与 loader.default_data_candidates() 一致：Boss 岗位数据优先，演示数据兜底。"""
+    candidates = loader.default_data_candidates()
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[-1]
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="把分析结果装载进 SQL 层（ODS/DWD/ADS）并执行数据质量门禁",
     )
-    parser.add_argument("--data", default=None, help="数据文件路径（默认：真实数据优先，演示数据兜底）")
+    parser.add_argument("--data", default=None, help="数据文件路径（默认：Boss 岗位数据优先，演示数据兜底）")
     parser.add_argument("--backend", choices=db.BACKENDS, default="sqlite", help="后端：mysql 或 sqlite（默认）")
     parser.add_argument("--sqlite-path", default=None, help="SQLite 文件路径（默认 output/employment_analysis.db）")
     parser.add_argument("--host", default="127.0.0.1", help="MySQL 主机")

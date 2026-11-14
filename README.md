@@ -4,7 +4,7 @@
 >
 > 分析内核之外还有两层：**MySQL 8 数据层**（ODS / DWD / ADS 三层建模，装载带阻断式数据质量门禁）与 **Power BI 呈现层**（模型、DAX 度量值与报表设计成文）。SQL 与 BI 只消费分析结果，**不重算对外数字**。
 >
-> 数据源可切换：问卷数据（自带合成样例）或 **Boss 直聘岗位数据**（仓库自带低频抓取脚本与口径适配层，采集口径、字段映射与已知限制见 [`docs/data_source_boss.md`](docs/data_source_boss.md)）。
+> **默认数据源是项目自采的 Boss 直聘岗位数据**（`scripts/crawl_boss.py` 低频抓取 → `src/sources/boss.py` 适配成 7 列分析契约；采集口径、字段映射与已知限制见 [`docs/data_source_boss.md`](docs/data_source_boss.md)）。问卷 CSV 仍是可用的第二套数据源，但只能通过 `--data` 显式指定，不参与自动探测 —— 外部塞进工作区的数据不能悄悄变成项目默认输入。
 >
 > **English** — An end-to-end, reproducible pipeline for job-posting and graduate-employment data: cleaning → multi-dimensional statistics → significance testing (95% CI, p-values, effect sizes) → charts → auto-generated Markdown report. It also ships a MySQL 8 warehouse layer (ODS/DWD/ADS with blocking data-quality gates, views and analytical queries) and a Power BI presentation guide, plus a Tkinter tool that *ranks* cities descriptively. Synthetic demo data ships with the repo, so one command reproduces the whole pipeline. **This README deliberately contains no result numbers** — every figure lives in the generated `output/report.md`, and a test enforces that.
 >
@@ -43,16 +43,21 @@
 # 1. 安装依赖
 pip install -r requirements.txt
 
-# 2. 生成演示数据（仓库已自带一份，可跳过；有真实数据也跳过）
+# 2. 准备数据（二选一）
+#    a) 真实数据：抓 Boss 岗位 → 适配成分析 CSV（需登录后的 Cookie；抓取产物不入库）
+$env:BOSS_COOKIE = "lastCity=101010100; __zp_stoken__=..."
+python scripts/crawl_boss.py --query 数据分析 --city 北京,上海 --rounds 3 --to-csv
+#    b) 离线跑通：用仓库自带的合成演示数据（无需 Cookie）
 python scripts/generate_demo_data.py
 
-# 3. 跑完整分析
+# 3. 跑完整分析（默认数据源：data/raw/boss_岗位数据集.csv → 演示数据兜底）
 python main.py
+python main.py --data data/raw/大学生就业数据.csv    # 想用问卷 CSV 时必须显式指定
 
 # 4. 运行测试（两种方式等价，pytest 需要先装 requirements-dev.txt）
 python tests/test_pipeline.py      # 27 项：分析内核
-python tests/test_sql_layer.py     # 10 项：SQL 数据层（用 SQLite 镜像，无需 MySQL）
-python tests/test_source_boss.py   # 10 项：Boss 岗位数据适配层（离线样例，不联网）
+python tests/test_sql_layer.py     # 11 项：SQL 数据层（用 SQLite 镜像，无需 MySQL）
+python tests/test_source_boss.py   # 18 项：Boss 岗位数据适配层（离线样例，不联网）
 pytest -q tests/
 
 # 5.（可选）装载进数据层并跑门禁与查询
@@ -107,12 +112,12 @@ python gui.py
 
 **所有基于演示数据的结论不得用于真实引用**：报告里的数字是程序从这份模拟数据里测出来的，不是现实结论。
 
-使用真实数据：把 CSV 放到 `data/raw/大学生就业数据.csv`，程序会自动优先加载它（并在报告中标注数据性质）。**这一份默认不入库**（`.gitignore` 已排除）：仓库里带的始终是合成演示数据，真实数据只留在本地；若要连数据一起发布，请先确认它允许再分发。字段说明见 [`data/README.md`](data/README.md)。
+问卷 CSV 不再自动加载：把它放到 `data/raw/大学生就业数据.csv` 后，用 `python main.py --data data/raw/大学生就业数据.csv` 显式指定（报告里仍会标注数据性质）。**这一份默认不入库**（`.gitignore` 已排除）：仓库里带的始终是合成演示数据，真实数据只留在本地；若要连数据一起发布，请先确认它允许再分发。字段说明见 [`data/README.md`](data/README.md)。
 
 > **数据来源、样本量、采集时间请务必登记在 `data/README.md` 中。**
 > 没有来源标注的数据，结论不可信、也不可被引用——本仓库自带的只是合成演示数据。
 
-### 另一个数据源：Boss 直聘岗位数据
+### 默认数据源：Boss 直聘岗位数据
 
 数据源不止问卷一种。`src/sources/boss.py` 把 Boss 直聘的岗位 JSON 适配成同一套 7 列分析契约（清洗、统计、体检、报告全部复用），`scripts/crawl_boss.py` 负责低频抓取（原始 JSON 落盘、支持断点续爬、只礼敬不对抗）。**口径不同，所以必须显式声明**：
 
@@ -190,12 +195,14 @@ python scripts/crawl_boss.py --query 数据分析,数据开发 --city 北京,上
 │   ├── report.py               # 由算出的结果生成结论 + markdown 报告（含溯源信息）
 │   ├── recommender.py          # 城市描述性排序（归一化加权 + 样本量门槛 + 权重敏感性）
 │   └── sources/
-│       └── boss.py             # Boss 直聘岗位数据 → 7 列分析契约（薪资解析 / 方向归类 / 代理分 / 扩展列）
+│       └── boss.py             # Boss 直聘岗位数据 → 7 列分析契约（薪资解析 / 方向归类 / 代理分 / 经验与规模序数 / 薪资带宽 / 发布时间归一 / 详情页解析 / 多值字段）
 ├── sql/
 │   ├── 00_schema.sql           # MySQL 8 权威 schema：15 张表，列级 COMMENT 即数据字典来源
 │   ├── schema_sqlite.sql       # 列名完全一致的 SQLite 镜像（本地零依赖验证）
 │   ├── 01_views.sql            # 7 个视图：长表 / 分位数 / 组内占比 / 看板视图 / 最新运行
-│   ├── quality_checks.sql      # 13 项阻断式门禁（单结果集，违规即退出码 1）
+│   ├── 02_job_market.sql       # 岗位市场层：岗位事实表 + 公司/技能维表 + 技能/福利桥表 + 5 个岗位视图
+│   ├── schema_job_sqlite.sql   # 上面那份的 SQLite 镜像（同表同列同视图）
+│   ├── quality_checks.sql      # 17 项阻断式门禁（单结果集，违规即退出码 1）
 │   └── queries/                # 5 个分析型查询：分组 TOP-N / 分位数交叉核对 / 帕累托 / 全局基准 / 透视
 ├── scripts/
 │   ├── generate_demo_data.py   # 合成演示数据生成器（effects / null 两个场景，参数全部公开）
@@ -203,8 +210,8 @@ python scripts/crawl_boss.py --query 数据分析,数据开发 --city 北京,上
 │   └── load_to_mysql.py        # 把一次分析装载进 MySQL / SQLite（含门禁与查询）
 ├── tests/
 │   ├── test_pipeline.py        # 27 项：清洗不变量（含无效薪资剔除）/ 统计性质 / 样本量门槛 / 数据质量体检 / Holm 校正 / null 场景校准 / README 无预置数字
-│   ├── test_sql_layer.py       # 10 项：三层装载 / 幂等 / 带数据重引导（DROP 顺序）/ 占位城市归一 / 门禁两道防线 / SQL 常量不漂移
-│   └── test_source_boss.py     # 10 项：薪资解析（K/千/万/日薪/面议/13 薪）/ 方向归类 / 代理分边界 / 7 列契约 / 去重 / 样例端到端跑通分析
+│   ├── test_sql_layer.py       # 11 项：三层装载 / 幂等 / 岗位市场层 / 带数据重引导（DROP 顺序）/ 占位城市归一 / 门禁两道防线 / SQL 常量不漂移
+│   └── test_source_boss.py     # 17 项：薪资解析（K/千/万/日薪/面议/13 薪）/ 方向归类 / 代理分边界 / 经验与规模序数 / 薪资带宽 / 发布时间归一 / 多值拆分 / 扩展列填充 / 详情页解析 / 离线 manifest / 7 列契约 / 去重 / 样例端到端跑通分析
 ├── legacy/
 │   ├── top_v0_original.py      # 重构前的 411 行单文件原版（仅存档，勿直接运行）
 │   └── README.md               # 「原版问题 → 新版做法」逐条对照
@@ -240,7 +247,7 @@ CSV ─► loader ─► cleaner ─► analysis / stats / quality ─► ADS �
 
 - **三层建模**：ODS 保留原始字符串（随时能回头核对「这条记录原样是什么」）；DWD 是清洗后的明细 + 维表，带 5 个外键和 2 个 `CHECK` 约束；ADS 是当次运行的结果表（分组统计、假设检验、交叉矩阵、质量体检、权重敏感性、溯源）。
 - **一条命令装载**：`python scripts/load_to_mysql.py`（`--backend mysql` / `--backend sqlite`，后者用 `sql/schema_sqlite.sql` 的零依赖镜像，不需要装任何数据库）。
-- **阻断式门禁**：装载完自动跑 `sql/quality_checks.sql` 的 13 项检查（行数守恒、非正薪资、满意度越界、占位城市泄漏、小样本均值泄漏、`significant` 与样本量一致……）。`severity = '阻断'` 的项只要有 1 条违规就以退出码 1 结束——**数据没通过校验，看板就不该刷新**。
+- **阻断式门禁**：装载完自动跑 `sql/quality_checks.sql` 的 17 项检查（行数守恒、非正薪资、满意度越界、占位城市泄漏、小样本均值泄漏、`significant` 与样本量一致、岗位薪资解析覆盖率、技能桥表孤行……）。`severity = '阻断'` 的项只要有 1 条违规就以退出码 1 结束——**数据没通过校验，看板就不该刷新**。
 - **能力证明的 5 个查询**（`sql/queries/`）：分组 TOP-N（CTE + `ROW_NUMBER`）、分位数交叉核对（SQL nearest-rank vs Python 线性插值）、帕累托累计占比、组内均值 vs 全局基准偏离、条件聚合透视。
 - **口径文档**：[`docs/metrics.md`](docs/metrics.md) 回答「同一个指标在 Python 与 SQL 里分别怎么算、谁说了算、怎么核对」；[`docs/data_dictionary.md`](docs/data_dictionary.md) 是字段级字典；[`docs/powerbi.md`](docs/powerbi.md) 给 BI 的模型关系、DAX 清单与报表设计。
 - **二次分析也在门禁之内**：数据库与 BI 都不重算对外指标，只消费分析层的结论——所以看板上的数字和报告里的数字天然一致。
@@ -451,12 +458,12 @@ PYTHONIOENCODING=gbk python main.py --top 8
 ## 十、待办
 
 - [ ] 填入真实数据与来源说明（`data/README.md`）——**这是目前最大的短板**：真实数据到位，报告才有现实意义（当前真实数据只放本地，未入库）
-- [x] 补充 `tests/`：清洗不变量（含无效薪资剔除）/ 统计性质 / 样本量门槛 / 数据质量体检 / Holm 校正 / null 场景校准 / README 无预置数字（现 47 项 = 分析内核 27 + SQL 数据层 10 + 数据源适配 10）
-- [x] 数据源扩展：Boss 直聘岗位数据（低频可断点续抓脚本 + 口径适配层：7 列口径契约 + 18 列扩展字段、6 个岗位方向归类、5 类薪资格式解析、手工样例 + 10 项离线测试 + 口径文档 + 多轮/多城市叠加采集）
+- [x] 补充 `tests/`：清洗不变量（含无效薪资剔除）/ 统计性质 / 样本量门槛 / 数据质量体检 / Holm 校正 / null 场景校准 / README 无预置数字（现 56 项 = 分析内核 27 + SQL 数据层 11 + 数据源适配 18）
+- [x] 数据源扩展：Boss 直聘岗位数据（低频可断点续抓脚本 + 口径适配层：7 列口径契约 + 25 列扩展字段（含经验/规模序数、薪资带宽、发布时间、JD 长度）、6 个岗位方向归类、5 类薪资格式解析、详情页 JD 抓取、采集 manifest、手工样例 + 18 项离线测试 + 口径文档 + 多轮/多城市叠加采集）
 - [x] 增加「专业 × 城市」交叉分析，并对样本不足的组合留空、样本量另表列出
 - [x] 统计推断层 `src/stats.py`：95% 置信区间 + Welch t 检验 + Mann-Whitney U + Cohen's d + Holm 多重比较校正
 - [x] 城市排序：样本量门槛 + 权重敏感性（Spearman 秩相关）
-- [x] 数据层 `src/db.py` + `sql/`：ODS/DWD/ADS 三层建模、7 个视图、5 个分析型查询、13 项阻断式门禁（MySQL 8 与 SQLite 双后端）
+- [x] 数据层 `src/db.py` + `sql/`：ODS/DWD/ADS 三层建模、7 个视图、5 个分析型查询、17 项阻断式门禁（含 4 项岗位门禁；MySQL 8 与 SQLite 双后端）
 - [x] 工程外壳：`docker-compose.yml` + `Makefile` + `pyproject.toml`（pytest / ruff）+ `.env.example`，CI 增加 `mysql:8.0` service container job
 - [x] 文档：指标口径（[`docs/metrics.md`](docs/metrics.md)）、数据字典（[`docs/data_dictionary.md`](docs/data_dictionary.md)）、BI 指南（[`docs/powerbi.md`](docs/powerbi.md)）
 - [ ] Power BI 桌面报表（`.pbix` + 截图）——**由你自己做**：步骤与验收清单见 [`docs/powerbi.md`](docs/powerbi.md) 第 7 节

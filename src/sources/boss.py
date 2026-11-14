@@ -30,7 +30,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -93,7 +93,7 @@ STABLE_WELFARE = ("五险一金", "双休", "周末双休", "年终奖", "补充
 #: 分析契约 7 列（与 config.REQUIRED_COLUMNS 保持一致）
 CANONICAL_COLUMNS: list[str] = list(config.REQUIRED_COLUMNS)
 
-#: 岗位侧扩展列（不进管线，但保留给 SQL 层与 BI 切片用）
+#: 岗位侧扩展列（不进 7 列契约，但会被装载进 SQL 层与 BI 切片使用）
 EXTRA_COLUMNS: list[str] = [
     "job_id",
     "job_title",
@@ -102,18 +102,52 @@ EXTRA_COLUMNS: list[str] = [
     "finance_stage",
     "company_size",
     "experience_required",
+    "experience_rank",
+    "company_size_rank",
     "job_type",
     "salary_lower",
     "salary_upper",
     "salary_months",
     "salary_unit",
+    "salary_band_ratio",
+    "publish_date",
     "city_district",
     "business_district",
     "welfare",
     "skills",
+    "jd_text",
+    "jd_len",
+    "detail_status",
     "source",
     "crawled_at",
 ]
+
+#: 工作经验 → 序数（趋势分析用；「不限」与未知值都给 9 = 不可排序，不是 0）
+EXPERIENCE_RANK: dict[str, int] = {
+    "在校/应届": 0,
+    "应届生": 0,
+    "在校生": 0,
+    "1年以内": 1,
+    "1年以下": 1,
+    "1-3年": 2,
+    "3-5年": 3,
+    "5-10年": 4,
+    "10年以上": 5,
+    "经验不限": 9,
+    "不限": 9,
+}
+EXPERIENCE_RANK_UNKNOWN = 9
+
+#: 公司规模标签 → 序数（0 最小）
+COMPANY_SIZE_RANK: dict[str, int] = {
+    "0-20人": 0,
+    "20-99人": 1,
+    "100-499人": 2,
+    "500-999人": 3,
+    "1000-9999人": 4,
+    "10000人以上": 5,
+}
+COMPANY_SIZE_RANK_UNKNOWN = 9
 
 
 # =============================================================================
@@ -278,12 +312,94 @@ def _text(value: Any, default: str = "") -> str:
     return text or default
 
 
+def experience_rank(text: Any) -> int:
+    """工作经验 → 0~5 的序数；「不限」与未知值都给 9（表示不可排序，而不是 0）。"""
+    return EXPERIENCE_RANK.get(_text(text), EXPERIENCE_RANK_UNKNOWN)
+
+
+def company_size_rank(text: Any) -> int:
+    """公司规模标签 → 0~5 的序数；未知值给 9。"""
+    return COMPANY_SIZE_RANK.get(_text(text), COMPANY_SIZE_RANK_UNKNOWN)
+
+
+def salary_band_ratio(salary: SalaryRange) -> float | None:
+    """薪资带宽 =（上界 − 下界）/ 中值。
+
+    区间越宽说明这个岗位的薪资越不透明（议价空间大）；单边区间或解析失败返回 None。
+    """
+    if salary.lower is None or salary.upper is None:
+        return None
+    mid = salary.monthly_mid
+    if not mid:
+        return None
+    return round((salary.upper - salary.lower) / mid, 4)
+
+
+def split_multi(text: Any) -> list[str]:
+    """把「五险一金|双休」这类多值串切成列表（去空、去重、保序）。"""
+    parts = re.split(r"[|,，、;；/\s]+", _text(text))
+    result: list[str] = []
+    for part in parts:
+        part = part.strip()
+        if part and part not in result:
+            result.append(part)
+    return result
+
+
+def parse_publish_date(value: Any) -> str | None:
+    """发布时间归一成 ``YYYY-MM-DD``，归一不出来就返回 None（不猜）。
+
+    覆盖三种真实形态：
+        - 毫秒/秒时间戳（Boss 接口里常见 13 位毫秒）
+        - 「2025-05-23」「2025/05/23」「2025.05.23」
+        - 相对时间：「今天」「昨天」「发布于 5月23日」——按**采集当天**推算；
+          跨年时（例如 1 月采到「12月30日」）自动回退到上一年。
+    """
+    text = _text(value)
+    if not text:
+        return None
+
+    if text.isdigit():
+        number = int(text)
+        if number > 10**12:
+            return datetime.fromtimestamp(number / 1000).strftime("%Y-%m-%d")
+        if number > 10**9:
+            return datetime.fromtimestamp(number).strftime("%Y-%m-%d")
+        return None
+
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    today = datetime.now()
+    if text in ("今天", "刚刚"):
+        return today.strftime("%Y-%m-%d")
+    if text.startswith("昨天"):
+        return (today - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    match = re.search(r"(\d{1,2})\s*月\s*(\d{1,2})\s*日", text)
+    if match:
+        month, day = int(match.group(1)), int(match.group(2))
+        year = today.year
+        if (month, day) > (today.month, today.day):
+            year -= 1
+        try:
+            return datetime(year, month, day).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+    return None
+
+
 def map_record(record: dict[str, Any], crawled_at: str | None = None) -> dict[str, Any]:
     """把一条 Boss 岗位原始记录映射成「7 列契约 + 扩展列」的一行。"""
     job = record.get("job", record) if isinstance(record, dict) else {}
     salary = parse_salary(job.get("salaryDesc") or job.get("salary"))
     job_type = classify_job_type(job.get("jobName"), job.get("jobExperience"))
     welfare = _welfare_list(job)
+    jd_text = _text(job.get("jobDescription") or job.get("postDescription") or job.get("jd"))
+    publish_raw = job.get("jobTime") or job.get("lastModifyTime") or job.get("publishTime")
 
     row: dict[str, Any] = {
         # ---- 7 列分析契约（岗位口径）----
@@ -304,15 +420,22 @@ def map_record(record: dict[str, Any], crawled_at: str | None = None) -> dict[st
         "finance_stage": _text(job.get("brandStageName")),
         "company_size": _text(job.get("brandScaleName")),
         "experience_required": _text(job.get("jobExperience")),
+        "experience_rank": experience_rank(job.get("jobExperience")),
+        "company_size_rank": company_size_rank(job.get("brandScaleName")),
         "job_type": job_type,
         "salary_lower": salary.lower,
         "salary_upper": salary.upper,
         "salary_months": salary.months,
         "salary_unit": salary.unit,
+        "salary_band_ratio": salary_band_ratio(salary),
+        "publish_date": parse_publish_date(publish_raw),
         "city_district": _text(job.get("areaDistrict")),
         "business_district": _text(job.get("businessDistrict")),
         "welfare": "|".join(welfare),
         "skills": "|".join(_text(item) for item in (job.get("skills") or []) if _text(item)),
+        "jd_text": jd_text,
+        "jd_len": len(jd_text),
+        "detail_status": _text(job.get("_detail_status"), "none"),
         "source": "boss",
         "crawled_at": crawled_at or _text(record.get("crawled_at")),
     }

@@ -252,7 +252,7 @@ def main() -> int:
     print()
     print("[!] 提醒：这是合成数据，请勿用于真实结论引用。")
     print("    报告里的所有数字（含 p 值与置信区间）由 src/analysis.py 在运行时算出。")
-    print("    真实数据请放 data/raw/大学生就业数据.csv，程序会优先加载它。")
+    print("    真实数据：python scripts/crawl_boss.py --to-csv（默认数据源就是它）")
     return 0
 
 

@@ -43,7 +43,7 @@ class App:
             if info.is_demo:
                 self._append(
                     "[注意] 当前是【合成演示数据】，结论不可用于真实引用。\n"
-                    "       真实数据请放到 data/raw/大学生就业数据.csv\n"
+                    "       真实数据：python scripts/crawl_boss.py --to-csv（Boss 岗位）\n"
                 )
             cities = sorted(self.df[config.COL_CITY].dropna().unique().tolist())
             self._append(f"[可用城市] {', '.join(cities)}\n")

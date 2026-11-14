@@ -22,6 +22,10 @@ import numpy as np
 import pandas as pd
 
 from src import analysis, cleaner, config, db, loader, report
+from src.sources import boss
+
+# 岗位数据源的离线样例（29 行，含 1 条重复 job_id）
+SAMPLE_PATH = Path(__file__).resolve().parent.parent / "data" / "raw" / "sample" / "boss_jobs_sample.jsonl"
 
 # 装载后应当能跑出结果的查询文件（其余查询靠 CI 的 mysql job 验证）
 QUERY_CASES = ("02_salary_percentiles_cross_check", "03_pareto_distribution")
@@ -116,6 +120,73 @@ class _Fixture:
 
     def close(self) -> None:
         self.temp.cleanup()
+
+
+class _JobFixture:
+    """岗位数据（离线样例）→ 清洗 → 装载，专门验证岗位市场层。"""
+
+    def __init__(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.path = Path(self.temp.name) / "boss_岗位数据集.csv"
+        boss.build_frame(SAMPLE_PATH).to_csv(self.path, index=False, encoding="utf-8-sig")
+
+        self.raw, self.info = loader.load_data(self.path)
+        self.clean, self.cleaning = cleaner.clean(self.raw)
+        self.results = analysis.run_all(self.clean, top_n=5)
+
+    def loaded(self):
+        conn = db.connect("sqlite")
+        db.ensure_schema(conn)
+        db.load_run(
+            self.raw,
+            self.clean,
+            self.results,
+            self.info,
+            self.cleaning,
+            connection=conn,
+            bootstrap=False,
+        )
+        return conn
+
+    def close(self) -> None:
+        self.temp.cleanup()
+
+
+def test_job_layer_loads_posting_skills() -> None:
+    """岗位数据装载：事实表 / 公司维表 / 技能维表 / 技能桥表都要有行，且可重复装载。"""
+    fixture = _JobFixture()
+    try:
+        conn = fixture.loaded()
+
+        def count(table: str) -> int:
+            return int(db.query(f"SELECT COUNT(*) AS n FROM {table}", connection=conn)[0]["n"])
+
+        jobs = count("dwd_job_posting")
+        assert jobs >= 20, f"岗位事实表行数过少：{jobs}"
+        assert count("dim_company") >= 5
+        assert count("dim_skill") > 0
+        assert count("dwd_job_skill") > 0
+        assert count("ods_job_posting") == jobs
+
+        ranks = {
+            int(row["experience_rank"])
+            for row in db.query("SELECT DISTINCT experience_rank FROM dwd_job_posting", connection=conn)
+        }
+        assert ranks <= {0, 1, 2, 3, 4, 5, 9}, f"出现越界序数：{sorted(ranks - {0, 1, 2, 3, 4, 5, 9})}"
+
+        # 重复装载：job_id 是主键，事实表行数不应增加（幂等）
+        db.load_run(
+            fixture.raw,
+            fixture.clean,
+            fixture.results,
+            fixture.info,
+            fixture.cleaning,
+            connection=conn,
+            bootstrap=False,
+        )
+        assert count("dwd_job_posting") == jobs
+    finally:
+        fixture.close()
 
 
 def _table_counts(conn) -> dict[str, int]:
@@ -347,6 +418,7 @@ def main() -> int:
     tests = [
         ("schema 与视图能引导（可重复执行）", test_schema_and_views_bootstrap),
         ("装载把 ODS/DWD/ADS 三层都写满", test_load_run_writes_every_layer),
+        ("岗位市场层装载（事实/维表/桥表/幂等）", test_job_layer_loads_posting_skills),
         ("重复装载幂等（行数不翻倍）", test_load_is_idempotent),
         ("带数据时重新引导 schema 也安全（DROP 顺序）", test_rebootstrap_after_load_is_safe),
         ("占位城市归到「未指定」成员", test_city_placeholder_becomes_unknown_member),

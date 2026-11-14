@@ -3,8 +3,8 @@
 """命令行入口：跑完整个数据分析流程。
 
 用法：
-    python main.py                          # 自动探测数据
-    python main.py --data data/raw/xxx.csv  # 指定数据文件
+    python main.py                          # 自动探测数据（Boss 抓取产物优先 → 演示数据兜底）
+    python main.py --data data/raw/xxx.csv  # 指定数据文件（问卷 CSV 必须这样显式指定）
     python main.py --no-charts              # 只算数、不出图
     python main.py --top 8                  # 专业维度取前 8 名
 
@@ -46,9 +46,14 @@ def make_console_safe() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="大学生就业数据分析：清洗 → 分析 → 可视化 → 生成报告"
+        description="就业 / 招聘数据分析：清洗 → 统计 → 检验 → 可视化 → 报告（默认数据源：Boss 岗位数据）"
     )
-    parser.add_argument("--data", type=str, default=None, help="指定数据文件路径")
+    parser.add_argument(
+        "--data",
+        type=str,
+        default=None,
+        help="指定数据文件路径（默认：Boss 岗位数据 → 演示数据；问卷 CSV 必须显式指定）",
+    )
     parser.add_argument("--no-charts", action="store_true", help="跳过图表生成")
     parser.add_argument("--top", type=int, default=5, help="专业维度取前几名，默认 5")
     parser.add_argument(

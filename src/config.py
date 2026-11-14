@@ -14,7 +14,7 @@ DATA_DIR = ROOT_DIR / "data" / "raw"
 OUTPUT_DIR = ROOT_DIR / "output"
 REPORT_DIR = OUTPUT_DIR
 
-# 真实数据优先，演示数据兜底
+# 问卷 CSV：仅通过 --data 显式使用（已移出默认数据源）
 REAL_DATA_PATH = DATA_DIR / "大学生就业数据.csv"
 DEMO_DATA_PATH = DATA_DIR / "demo_大学生就业数据.csv"
 # Boss 直聘岗位数据集（由 scripts/crawl_boss.py 抓到原始 JSONL，
@@ -22,6 +22,11 @@ DEMO_DATA_PATH = DATA_DIR / "demo_大学生就业数据.csv"
 BOSS_DATA_PATH = DATA_DIR / "boss_岗位数据集.csv"
 # 原始抓取缓存（可断点续爬；体量可能很大，已在 .gitignore 里排除）
 BOSS_RAW_PATH = DATA_DIR / "boss" / "raw_jobs.jsonl"
+
+# 默认数据源：真实 Boss 抓取产物（BOSS_DATA_PATH）优先，演示数据兜底。
+# 问卷 CSV（REAL_DATA_PATH）不参与自动选择，需要时用 --data 显式指定。
+# 这样做的原因：外部塞进工作区的文件不能悄悄成为项目默认输入，
+# 而 Boss 岗位数据是本项目「自己采集」的数据，口径、字段、溯源都可控。
 
 # ---------------- 列名常量 ----------------
 # 说明：本项目**不做性别维度分析**，因此数据里有没有「性别」列都不影响运行。

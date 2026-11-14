@@ -1,5 +1,5 @@
 # 常用命令（Linux / macOS / CI；Windows 下可用 Git Bash，或直接跑 README 里的 PowerShell 命令）
-.PHONY: help install test lint run sqlite mysql-up mysql-load mysql-down clean
+.PHONY: help install test lint run crawl sqlite mysql-up mysql-load mysql-down clean
 
 help:  ## 显示可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -15,8 +15,11 @@ test:  ## 跑全部测试（分析流水线 + SQL 数据层 + 数据源适配）
 lint:  ## 静态检查（未使用导入、未定义名称等「确定是问题」的规则）
 	ruff check .
 
-run:  ## 跑完整分析（真实数据优先、演示数据兜底），生成报告与图表
+run:  ## 跑完整分析（Boss 岗位数据优先、演示数据兜底），生成报告与图表
 	python main.py
+
+crawl:  ## 抓取真实 Boss 岗位数据并适配成分析 CSV（需要先设置 BOSS_COOKIE）
+	python scripts/crawl_boss.py --query 数据分析,数据开发 --city 北京,上海 --rounds 3 --to-csv
 
 sqlite:  ## 装载进本地 SQLite 镜像并跑门禁（零依赖，没装 MySQL 也能验证 SQL 层）
 	python scripts/load_to_mysql.py --query 03_pareto_distribution

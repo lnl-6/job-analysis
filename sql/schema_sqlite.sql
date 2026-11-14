@@ -35,6 +35,19 @@ DROP TABLE IF EXISTS ads_major_city_matrix;
 DROP TABLE IF EXISTS ads_group_stats;
 DROP TABLE IF EXISTS ads_run_meta;
 DROP TABLE IF EXISTS dwd_survey_clean;
+-- 岗位市场层（sql/schema_job_sqlite.sql 建的支路）：它引用 dim_city / dim_industry，
+-- 所以必须先于维表清场，否则重跑引导时会被外键挡住（FOREIGN KEY constraint failed）。
+DROP VIEW  IF EXISTS v_job_market_overview;
+DROP VIEW  IF EXISTS v_skill_demand;
+DROP VIEW  IF EXISTS v_city_jobs;
+DROP VIEW  IF EXISTS v_experience_salary;
+DROP VIEW  IF EXISTS v_company_profile;
+DROP TABLE IF EXISTS dwd_job_skill;
+DROP TABLE IF EXISTS dwd_job_welfare;
+DROP TABLE IF EXISTS dwd_job_posting;
+DROP TABLE IF EXISTS dim_skill;
+DROP TABLE IF EXISTS dim_company;
+DROP TABLE IF EXISTS ods_job_posting;
 DROP TABLE IF EXISTS dim_industry;
 DROP TABLE IF EXISTS dim_direction;
 DROP TABLE IF EXISTS dim_education;
