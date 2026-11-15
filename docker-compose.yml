@@ -1,0 +1,36 @@
+# MySQL 8 数据层：起一个容器就能验证 SQL 层（表结构、视图、查询、门禁）
+#
+# 用法：
+#   cp .env.example .env      # 可选：改密码/端口
+#   docker compose up -d mysql
+#   python scripts/load_to_mysql.py --backend mysql --host 127.0.0.1 --password employment
+#
+# 首次创建数据卷时，容器会自动执行容器内 /docker-entrypoint-initdb.d 下的脚本
+# （这里把 sql/00_schema.sql 与 sql/01_views.sql 挂进去，按文件名顺序执行）。
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: employment-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-employment}
+      MYSQL_DATABASE: employment_analysis
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql/00_schema.sql:/docker-entrypoint-initdb.d/00_schema.sql:ro
+      - ./sql/01_views.sql:/docker-entrypoint-initdb.d/01_views.sql:ro
+    healthcheck:
+      # 等数据库真的能连上，避免装载脚本跑在启动过程中间
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-employment}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql-data:
