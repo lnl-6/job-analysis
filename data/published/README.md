@@ -50,5 +50,14 @@ python scripts/export_published_summary.py
 # 原始数据由 scripts/crawl_boss.py 现场采集，不入库。
 ```
 
+每次运行还会在 `boss/<YYYY-MM-DD>/boss_market_summary.csv` 存一份按日快照；
+比较最近两次快照（岗位数、均值、中位数的变化，以及新增/消失的分组）：
+
+```bash
+python scripts/compare_snapshots.py
+```
+
+跨日差异只描述「这批发出去的岗位变了」，两次采样独立，不能当成薪资涨跌的趋势。
+
 口径细节见 [`docs/metrics.md`](../../docs/metrics.md)，数据源说明见
 [`docs/data_source_boss.md`](../../docs/data_source_boss.md)。

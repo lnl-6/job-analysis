@@ -62,7 +62,7 @@ python scripts/load_to_mysql.py --backend sqlite
 
 ```
 src/            分析内核：loader / cleaner / analysis / stats / quality / actions / report / viz / recommender / db / sources/boss.py
-scripts/        crawl_boss.py（抓取）、load_to_mysql.py（装载+门禁）、export_published_summary.py（聚合表）、audit_major_coverage.py（只读审计归类覆盖率）
+scripts/        crawl_boss.py（抓取）、load_to_mysql.py（装载+门禁）、export_published_summary.py（聚合表 + 按日快照）、audit_major_coverage.py（只读审计归类覆盖率）、compare_snapshots.py（跨日快照对比）
 sql/            ODS/DWD/ADS 建表 + 视图 + 分析型查询 + 17 项质量门禁（MySQL 8 与 SQLite 双版本）
 tests/          71 项离线测试（数据由 tests/_fixtures.py 现场生成）
 docs/           口径对照、字段字典、数据源说明、Power BI 指南、方法学与踩坑、报告快照

@@ -57,3 +57,4 @@ Boss_zhipin_spider-master/
 output/boss_sample.csv
 # 数据集的旁注文件（采集统计），与数据集本身一样不入库
 data/raw/*.meta.json
+output/history/

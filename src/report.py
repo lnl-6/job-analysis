@@ -737,6 +737,12 @@ def write_markdown_report(
     ]
 
     path.write_text("\n".join(lines), encoding="utf-8")
+
+    # 报告不被覆盖丢历史：每次运行另存一份到 output/history/（不入库）
+    history_dir = Path(path).parent / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    (history_dir / f"report-{stamp}.md").write_text("\n".join(lines), encoding="utf-8")
     return path
 
 

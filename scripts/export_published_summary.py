@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -131,10 +132,19 @@ def main(argv: list[str] | None = None) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     table.to_csv(out, index=False, encoding="utf-8-sig")
 
+    # 按日快照：data/published/boss/<YYYY-MM-DD>/boss_market_summary.csv
+    # 扁平文件供旧链接使用，按日目录供 scripts/compare_snapshots.py 做跨日差异。
+    stamp = datetime.now().strftime("%Y-%m-%d")
+    dated_dir = out.parent / "boss" / stamp
+    dated_dir.mkdir(parents=True, exist_ok=True)
+    dated = dated_dir / out.name
+    table.to_csv(dated, index=False, encoding="utf-8-sig")
+
     print(f"[汇总] 数据：{info.describe()} → 清洗后 {len(clean)} 行")
     print(f"[汇总] 指纹：{report._file_sha256(info.path, 12)}")
     print(f"[汇总] 剔除：无效薪资 {cleaning.invalid_salary_removed} 行，IQR 异常 {cleaning.outliers_removed} 行")
     print(f"[汇总] 输出：{len(table)} 行 × {len(table.columns)} 列 → {out}")
+    print(f"[汇总] 快照：{dated}")
     return 0
 
 
