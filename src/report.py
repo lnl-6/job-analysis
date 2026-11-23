@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src import config, quality, stats
+from src import actions, config, quality, stats
 from src.cleaner import CleaningReport
 from src.loader import DataSourceInfo
 
@@ -461,12 +461,67 @@ def _satisfaction_column(frame: pd.DataFrame, term: str) -> pd.DataFrame:
     return frame
 
 
+def _action_cards(
+    results: dict[str, object],
+    meta: dict[str, object] | None,
+) -> list[actions.ActionCard]:
+    """行动卡（报告与控制台共用；出错时降级为空列表，不阻断报告生成）。"""
+    try:
+        return actions.build_actions(results, meta)
+    except Exception:  # noqa: BLE001 - 行动层是锦上添花，不能拖垮主报告
+        return []
+
+
+def build_machine_view(
+    info: DataSourceInfo,
+    results: dict[str, object],
+    meta: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """机器可读视图（写进 output/report.json，供 CI 与 BI 复用）。"""
+    cards = _action_cards(results, meta or info.meta)
+    comparison_rows: list[dict[str, object]] = []
+    for item in results.get("comparisons") or []:  # type: ignore[union-attr]
+        comparison_rows.append(dict(item.to_row()))  # type: ignore[union-attr]
+    ov = results.get("ov")
+    overall: dict[str, object] = {}
+    if isinstance(ov, pd.Series):
+        overall = {str(k): (float(v) if isinstance(v, (int, float)) else str(v)) for k, v in ov.items()}
+    return {
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S %z"),
+        "data": {
+            "file": Path(info.path).name,
+            "rows": info.rows,
+            "cols": info.cols,
+            "meta": dict(info.meta),
+        },
+        "overall": overall,
+        "comparisons": comparison_rows,
+        "actions": actions.to_json(cards),
+    }
+
+
+def write_json_report(
+    info: DataSourceInfo,
+    results: dict[str, object],
+    meta: dict[str, object] | None = None,
+) -> Path:
+    """生成 output/report.json（机器可读：溯源 + 对比 + 行动卡）。"""
+    import json
+
+    out_dir = config.ensure_output_dir()
+    path = out_dir / "report.json"
+    payload = build_machine_view(info, results, meta)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
 def write_markdown_report(
     info: DataSourceInfo,
     report: CleaningReport,
     results: dict[str, object],
     conclusions: list[str],
     charts: dict[str, Path],
+    meta: dict[str, object] | None = None,
 ) -> Path:
     """生成 output/report.md。"""
     out_dir = config.ensure_output_dir()
@@ -587,7 +642,21 @@ def write_markdown_report(
         "",
     ]
 
-    lines += ["## 六、图表", ""]
+    lines += [
+        "## 六、行动建议（描述性，不是预测）",
+        "",
+        "> 下面每张卡都由上面的统计表机械推出：换一批数据重跑，结论就会跟着变。"
+        "强度按样本量、效应量与稳健性判定；标「弱」的不要直接当决策依据。"
+        "每条卡都带「证据」与「出处」，可顺着出处核对原始数字。",
+        "",
+        _df_to_markdown(actions.to_frame(_action_cards(results, meta or info.meta))),
+        "",
+        "> 卡片生成规则见 README「行动建议是怎么来的」一节；"
+        "程序内不写死任何建议文案里的数字。",
+        "",
+    ]
+
+    lines += ["## 七、图表", ""]
     if charts:
         for name, chart_path in charts.items():
             rel = chart_path.name
@@ -597,16 +666,16 @@ def write_markdown_report(
 
     lines += [
         "",
-        "## 七、数据质量体检（自动算出的可疑之处）",
+        "## 八、数据质量体检（自动算出的可疑之处）",
         "",
         "在给结论之前，先检查这批数据本身是否站得住：缺失、重复、取值集中度，"
         "以及「这个维度到底有没有区分度」。全部现算，不含任何预设判断。",
         "",
-        "### 7.1 缺失率",
+        "### 8.1 缺失率",
         "",
         _df_to_markdown(_missing_frame(results)),
         "",
-        "### 7.2 体检结论",
+        "### 8.2 体检结论",
         "",
         _df_to_markdown(_quality_frame(results)),
         "",
@@ -616,7 +685,7 @@ def write_markdown_report(
         "> eta² = 组间平方和 / 总平方和（单因素 ANOVA）：0 = 该维度完全不能区分，1 = 完全区分。",
         "> 体检只报现象：不解释原因，也不预测。",
         "",
-        "## 八、方法与局限",
+        "## 九、方法与局限",
         "",
         "**数据清洗**",
         "",
@@ -675,6 +744,7 @@ def print_console_report(
     results: dict[str, object],
     conclusions: list[str],
     charts: dict[str, Path],
+    meta: dict[str, object] | None = None,
 ) -> None:
     """在控制台打印摘要（不弹窗、不阻塞；只用可安全打印的字符）。"""
     sep = "=" * 62
@@ -705,6 +775,13 @@ def print_console_report(
         # 控制台去掉 markdown 的 ** 标记
         print(f"  {i}. {c.replace('**', '')}")
     print()
+
+    cards = _action_cards(results, meta if meta is not None else info.meta)
+    if cards:
+        print("-- 行动建议（描述性，不是预测） --")
+        for card in cards:
+            print(f"  [{card.strength}] {card.title}：{card.action}")
+        print()
 
     print("-- 分析明细 --")
     for title, key in [

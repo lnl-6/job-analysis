@@ -34,14 +34,14 @@ python scripts/crawl_boss.py --cookie-file cookie.txt --query 数据分析 --to-
 python main.py
 
 # 4. 测试（不需要任何数据文件）
-pytest -q tests/          # 64 项；或分文件跑 test_pipeline.py / test_sql_layer.py / test_source_boss.py
+pytest -q tests/          # 71 项；或分文件跑 test_pipeline.py / test_sql_layer.py / test_source_boss.py / test_actions.py
 
 # 5.（可选）装载进数据层并跑门禁；没有 MySQL 时走 SQLite 镜像
 python scripts/load_to_mysql.py --backend sqlite
 ```
 常用参数：`--data <路径>` 指定数据文件、`--check-data` 只检查数据、`--no-charts` 只算数不出图、`--top N` 专业维度取前 N 名。图形界面 `python gui.py` 是**演示用的小工具**（按样本给城市做描述性排序、不做预测），不属于分析主线；主线是 `main.py` 与 SQL/BI 两层。
 
-产出：`output/report.md`（报告）、`output/*.png`（9 张图）、`output/employment_analysis.db`（SQLite 镜像）。
+产出：`output/report.md`（报告）、`output/report.json`（机器可读：溯源 + 对比 + 行动卡）、`output/*.png`（9 张图）、`output/employment_analysis.db`（SQLite 镜像）。
 
 ## 三、部分名词解释
 
@@ -61,16 +61,32 @@ python scripts/load_to_mysql.py --backend sqlite
 ## 五、目录结构
 
 ```
-src/            分析内核：loader / cleaner / analysis / stats / quality / report / viz / recommender / db / sources/boss.py
+src/            分析内核：loader / cleaner / analysis / stats / quality / actions / report / viz / recommender / db / sources/boss.py
 scripts/        crawl_boss.py（抓取）、load_to_mysql.py（装载+门禁）、export_published_summary.py（聚合表）、audit_major_coverage.py（只读审计归类覆盖率）
 sql/            ODS/DWD/ADS 建表 + 视图 + 分析型查询 + 17 项质量门禁（MySQL 8 与 SQLite 双版本）
-tests/          64 项离线测试（数据由 tests/_fixtures.py 现场生成）
+tests/          71 项离线测试（数据由 tests/_fixtures.py 现场生成）
 docs/           口径对照、字段字典、数据源说明、Power BI 指南、方法学与踩坑、报告快照
 data/published/ 可公开的聚合统计（唯一入库的数据文件）
 output/         运行产物：报告、图表、SQLite 库（不入库）
 ```
 
 更多文档：[指标口径](docs/metrics.md) · [字段字典](docs/data_dictionary.md) · [数据源与合规](docs/data_source_boss.md) · [Power BI 模型与 DAX](docs/powerbi.md) · [方法学/踩坑/局限](docs/methods.md) · [报告快照（一次真实运行的结果）](docs/sample_report.md)
+
+## 六、行动建议是怎么来的
+
+报告第六节的 7 张行动卡全部由 `src/actions.py` 从 `results` 里**机械推导**，没有任何模型或外推。映射规则：
+
+| 卡片 | 输入 | 怎么判强度 |
+| --- | --- | --- |
+| 投递方向 | 各方向 P50 与样本量（`ads_group_stats`） | P50 高于整体 10% 且 n ≥ 30 → 强；高于整体 → 中；否则弱 |
+| 投递城市 | 机会指数 = 样本占比 ×（P50 / 整体 P50） | 指数 ≥ 0.08 → 中，否则弱 |
+| 一线 vs 新一线 | `ads_comparisons.city_tier1_vs_new_tier1` | Holm 显著且 \|d\| ≥ 0.5 → 强；≥ 0.2 → 中；不显著 → 弱 |
+| 学历回报 | 相邻学历档 P50 差 + `edu_*` 对比 | 显著且 \|d\| 大 → 强；档位差 < 500 元 → 中（「学历不是主要变量」） |
+| 实习优先 | 按岗位类型分层后的实习/非实习差 | 差 ≥ 1000 元 → 中，否则弱 |
+| 城市稳健性 | 6 组权重场景中 TOP1 变化次数 | 0 次 → 强；1 次 → 中；≥ 2 次 → 弱 |
+| 结论可信度 | 缺口分组数、体检提示、归类覆盖率、配额完成率 | 无缺项 → 强；有样本缺口 → 中；覆盖率/配额不达标 → 弱 |
+
+同一套卡片也会写进 `output/report.json` 的 `actions` 字段，CI 与 BI 可以复用；卡片的生成规则由 `tests/test_actions.py` 守着（空 results 必须产出空列表 —— 防止有人把结论写死）。
 
 ## License
 

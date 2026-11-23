@@ -162,9 +162,15 @@ def main() -> int:
         results,
         satisfaction_term=config.satisfaction_term_for(info.path.name),
     )
-    report.print_console_report(info, cleaning_report, results, conclusions, charts)
-    md_path = report.write_markdown_report(info, cleaning_report, results, conclusions, charts)
+    report.print_console_report(
+        info, cleaning_report, results, conclusions, charts, meta=info.meta
+    )
+    md_path = report.write_markdown_report(
+        info, cleaning_report, results, conclusions, charts, meta=info.meta
+    )
+    json_path = report.write_json_report(info, results, meta=info.meta)
     print(f"[5/5] 报告已生成：{md_path}")
+    print(f"      机器可读视图：{json_path}")
 
     return 0
 
