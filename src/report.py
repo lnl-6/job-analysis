@@ -484,7 +484,9 @@ def build_machine_view(
         comparison_rows.append(dict(item.to_row()))  # type: ignore[union-attr]
     ov = results.get("ov")
     overall: dict[str, object] = {}
-    if isinstance(ov, pd.Series):
+    if isinstance(ov, dict):
+        overall = {str(k): (float(v) if isinstance(v, (int, float)) else str(v)) for k, v in ov.items()}
+    elif isinstance(ov, pd.Series):
         overall = {str(k): (float(v) if isinstance(v, (int, float)) else str(v)) for k, v in ov.items()}
     return {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S %z"),

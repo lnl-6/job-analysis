@@ -562,6 +562,19 @@ def salary_coverage(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def _raw_totals(raw_path: str | Path) -> dict[str, int]:
+    """以落盘的原始 JSONL 为准重算记录数与唯一岗位数。"""
+    records = 0
+    job_ids: set[str] = set()
+    for payload in iter_raw_records(raw_path):
+        records += 1
+        job = payload.get("job") if isinstance(payload.get("job"), dict) else payload
+        job_id = _text(job.get("encryptJobId") or job.get("securityId") or job.get("jobId"))
+        if job_id:
+            job_ids.add(job_id)
+    return {"records": records, "unique_jobs": len(job_ids)}
+
+
 def write_dataset_meta(frame: pd.DataFrame, csv_path: str | Path, raw_path: str | Path) -> Path:
     """把采集清单 + 覆盖率写到 CSV 旁边的 ``*.meta.json``。
 
@@ -598,6 +611,15 @@ def write_dataset_meta(frame: pd.DataFrame, csv_path: str | Path, raw_path: str 
                     "started_at", "finished_at", "stats", "totals",
                 )
             }
+            # 清单里的 totals 可能是旧版本写的（历史上有过 records=1885 与 unique_jobs=2021
+            # 自相矛盾的记录）。这里以落盘的原始 JSONL 为准重算，并把旧值单独留档备查。
+            declared = payload["manifest"].get("totals")
+            actual = _raw_totals(raw_path)
+            payload["manifest"]["totals"] = actual
+            if declared and declared != actual:
+                payload["manifest"]["totals_declared"] = declared
+                if "pages" in declared:  # 页数只能由采集器记，沿用旧值
+                    payload["manifest"]["totals"]["pages"] = declared["pages"]
 
     meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return meta_path
