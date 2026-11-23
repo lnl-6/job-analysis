@@ -1,0 +1,282 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>招聘岗位数据分析报告</title><style>
+body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;max-width:980px;
+margin:2rem auto;padding:0 1.2rem;line-height:1.65;color:#1f2328;background:#fff}
+h1,h2,h3{line-height:1.3;margin:1.6em 0 .6em}
+h1{font-size:1.9em;border-bottom:1px solid #d0d7de;padding-bottom:.3em}
+h2{font-size:1.4em;border-bottom:1px solid #eaeef2;padding-bottom:.25em}
+table{border-collapse:collapse;margin:1em 0;font-size:.92em;display:block;overflow-x:auto}
+th,td{border:1px solid #d0d7de;padding:.4em .7em;text-align:left}
+th{background:#f6f8fa}
+code{background:#f6f8fa;padding:.1em .35em;border-radius:4px;font-size:.9em}
+blockquote{margin:1em 0;padding:.2em 1em;color:#57606a;border-left:4px solid #d0d7de}
+img{max-width:100%;border:1px solid #eaeef2;border-radius:6px;margin:.6em 0}
+</style></head><body><h1>就业数据分析报告（Boss直聘岗位数据）</h1>
+<blockquote>本报告由 <code>main.py</code> 自动生成：<strong>下面每一个数字（样本量、均值、差值、95% 置信区间、p 值、效应量、判定）都是本次运行从数据里算出来的</strong>。</blockquote>
+<blockquote>程序内不含任何预设结论，也不包含任何预测——只对这批样本做描述性测量。</blockquote>
+<h2>一、本次运行信息（可追溯）</h2>
+<li>数据文件：<code>D:\项目\data\raw\boss_岗位数据集.csv</code></li>
+<li>数据指纹：SHA-256 前 12 位 <code>ea1fbc08c64d</code></li>
+<li>数据规模：2021 行 × 32 列（清洗后的有效样本见下一节）</li>
+<li>数据性质：真实数据（本项目自采，非模拟数据）</li>
+<li>数据口径：<strong>Boss直聘岗位数据</strong> —— 岗位口径：期望薪资=岗位薪资区间中值（元/月）、满意度评分=岗位吸引力代理分（0~5，proxy）、是否有实习经历=岗位是否面向实习/应届、毕业去向=岗位类型（实习/校招/社招）、专业=岗位方向；详见 docs/data_source_boss.md。</li>
+<li>采集规模：2021 条记录｜唯一岗位 2021 个｜47 个城市（清单页面数 70；配额完成率见 docs/data_source_boss.md 的局限说明）</li>
+<li>方向归类覆盖率：66.0%（未归类 688 条，占 34.0%；<strong>低于阈值 85%</strong>——说明关键词表还跟不上岗位命名，「其他」这一组的数字不能当成一个方向来读）</li>
+<li>薪资可解析占比：99.9%（2019/2021 条；「面议」与解析失败的不计入，均值只覆盖可解析样本）</li>
+<li>运行参数：专业维度取前 6 名</li>
+<li>判定阈值：最小样本量 30｜显著性水平 α=0.05｜置信水平 95%｜IQR 系数 1.5</li>
+<li>运行环境：Python 3.14.8｜pandas 3.0.3｜numpy 2.4.4｜scipy 1.18.1</li>
+<li>生成时间：2026-11-23 22:07:18 +0800</li>
+<h2>二、数据清洗</h2>
+<li>原数据行数：2021</li>
+<li>无效薪资行剔除：0 行（期望薪资 ≤ 0，不是有效的薪资期望）</li>
+<li>缺失值填充：{'期望薪资': 2}</li>
+<li>异常值剔除：157 行（薪资合理区间 -1910 ~ 17850 元）</li>
+<li>清洗后行数：1864</li>
+<li>合计移除：157 行 (7.8%)</li>
+<h2>三、对比与显著性检验</h2>
+<p>判定规则：两组样本量都 ≥ 30 才给结论；在满足样本量的前提下，Holm 校正后的 p &lt; 0.05 记「差异显著」，否则记「差异不显著」。样本不足的对比只报告样本量，不给结论。</p>
+<p>同一次运行共 5 组对比，作为一个检验族做 Holm 校正（只做一组对比时，校正 p 等于原始 p）。</p>
+<table>
+<tr><th>对比</th><th>A 组（n）</th><th>B 组（n）</th><th>均值差</th><th>95% 置信区间</th><th>p（Welch）</th><th>p（Holm 校正）</th><th>p（Mann-Whitney）</th><th>Cohen's d</th><th>判定</th></tr>
+<tr><td>学历：博士 vs 本科</td><td>博士（3）</td><td>本科（850）</td><td>-280.8</td><td>[-4436, +3875]</td><td>0.803</td><td>0.803</td><td>0.910</td><td>-0.08</td><td>样本不足（&lt;30），不给结论</td></tr>
+<tr><td>学历：硕士 vs 本科</td><td>硕士（28）</td><td>本科（850）</td><td>1154.2</td><td>[-106, +2414]</td><td>0.071</td><td>0.142</td><td>0.041</td><td>0.33</td><td>样本不足（&lt;30），不给结论</td></tr>
+<tr><td>实习：有 vs 无</td><td>有实习（244）</td><td>无实习（1620）</td><td>-2003.0</td><td>[-2422, -1584]</td><td>&lt;0.001</td><td>&lt;0.001</td><td>&lt;0.001</td><td>-0.66</td><td>差异显著</td></tr>
+<tr><td>城市：一线 vs 新一线</td><td>一线（267）</td><td>新一线（255）</td><td>727.8</td><td>[+80, +1375]</td><td>0.028</td><td>0.111</td><td>0.059</td><td>0.19</td><td>差异不显著</td></tr>
+<tr><td>专业：数据开发 vs 其他</td><td>数据开发（19）</td><td>其他（658）</td><td>1773.5</td><td>[+95, +3452]</td><td>0.039</td><td>0.118</td><td>0.008</td><td>0.69</td><td>样本不足（&lt;30），不给结论</td></tr>
+</table>
+<blockquote>均值差 = A 组均值 − B 组均值；置信区间由 Welch–Satterthwaite 自由度算出；Cohen's d 是效应量（0.2 小 / 0.5 中 / 0.8 大）。</blockquote>
+<blockquote><strong>显著 ≠ 因果，也不等于总体如此</strong>：这里只报告「本样本里两组均值差多大、有多不确定」。</blockquote>
+<h3>3.1 混杂与不比较（岗位类型 × 是否实习）</h3>
+<p>「是否实习」在岗位数据里与岗位类型（实习 / 校招 / 社招）几乎重合：实习岗天然属于实习类型，「非实习」里混着校招与社招。因此「实习 vs 非实习」的差值<strong>不能读成「实习经历值多少钱」</strong>，它至少混入了岗位类型、经验门槛与公司类型三种差异。</p>
+<p>下表把两维拆开：只有当同一岗位类型内部的两格都达到样本量门槛时，才可能谈「实习本身」的差异；其余格子只列数字、不下结论。</p>
+<table>
+<tr><th>岗位类型</th><th>是否实习</th><th>平均期望薪资</th><th>人数</th></tr>
+<tr><td>实习</td><td>是</td><td>4599.825</td><td>150</td></tr>
+<tr><td>校招</td><td>是</td><td>7851.063829787234</td><td>94</td></tr>
+<tr><td>社招</td><td>否</td><td>7855.3912037037035</td><td>1620</td></tr>
+</table>
+<h2>四、核心结论（由上一节与明细表推导）</h2>
+<p>1. <strong>学历：博士 vs 本科</strong>：博士 平均 8082 元（n=3）、本科 平均 8363 元（n=850）；相差 -281 元；两组样本量未同时达到门槛 30 → 样本不足（&lt;30），不给结论。</p>
+<p>2. <strong>学历：硕士 vs 本科</strong>：硕士 平均 9518 元（n=28）、本科 平均 8363 元（n=850）；相差 +1154 元；两组样本量未同时达到门槛 30 → 样本不足（&lt;30），不给结论。</p>
+<p>3. <strong>实习：有 vs 无</strong>：有实习 平均 5852 元（n=244）、无实习 平均 7855 元（n=1620）；相差 -2003 元，（95% 置信区间 [-2422, -1584]；Welch t 检验 p=&lt;0.001；Mann-Whitney U 检验 p=&lt;0.001；Cohen's d=-0.66，中效应）；→ 差异显著：在本样本中差异显著（显著 ≠ 因果，也不代表总体一定如此）。（注意：这批数据里「是否实习」与岗位类型高度重合，该差值<strong>不可解释为实习经历带来的影响</strong>，分层见第 3.1 节）</p>
+<p>4. <strong>城市：一线 vs 新一线</strong>：一线 平均 9210 元（n=267）、新一线 平均 8482 元（n=255）；相差 +728 元，（95% 置信区间 [+80, +1375]；Welch t 检验 p=0.028；Mann-Whitney U 检验 p=0.059；Cohen's d=0.19，可忽略效应）；→ 差异不显著：本样本不支持「两组有差异」的判断。</p>
+<p>5. <strong>专业：数据开发 vs 其他</strong>：数据开发 平均 8717 元（n=19）、其他 平均 6944 元（n=658）；相差 +1773 元；两组样本量未同时达到门槛 30 → 样本不足（&lt;30），不给结论。</p>
+<p>6. <strong>专业维度</strong>：在样本量达标的专业中，平均期望薪资从高到低为 数据分析（7957 元，n=1116）、算法（7371 元，n=50）、其他（6944 元，n=658）（共 3 个达标，此处列出前 3 个）。</p>
+<p>7. <strong>毕业去向</strong>：样本量达标的去向里，平均期望薪资最高的是「社招」（7855 元），最低的是「实习」（4600 元）。</p>
+<p>8. <strong>专业 × 城市</strong>：在「薪资前 6 专业 × 主要城市」中，只有样本量 ≥ 30 的组合参与比较（其余在表中为空白）；平均期望薪资最高的是「数据分析 @ 北京」（9791 元，n=68），最低的是「数据分析 @ 武汉」（7822 元，n=34）。</p>
+<p>9. <strong>整体概况</strong>：有效样本 1864 条，平均期望薪资 7593 元（95% 置信区间 [7452, 7734]，中位数 7000 元），平均吸引力代理分（proxy） 2.99 / 5，有实习经历者占比 13.1%。</p>
+<p>10. <strong>城市排序的稳健性</strong>：换一组权重后，TOP1 城市在 2/6 个权重场景里发生变化——排序对权重是敏感的，不是数据唯一决定的；各场景与默认排序的 Spearman 秩相关在 0.58 ~ 1.00 之间。</p>
+<p>11. <strong>数据质量提示</strong>：体检有 1 项需要留意——缺失率最高的列。这只说明「这批数据在这些维度上区分不出来」，不代表现实世界如此。</p>
+<p>12. <strong>缺失最多的一列</strong>：<code>publish_date</code> 缺失 100.00%（共 32 列存在缺失，逐列见第七节）；缺失会削弱对应维度的可比性，但不会改变已给出的均值与判定。</p>
+<p>13. <strong>样本缺口</strong>：3/4 个维度还有未达标分组，缺口最大的是「major」（3/6 组达标，还差 50 条才能把全部组补到门槛 30）；明细见第 4.1 节——「缺样本就不给结论」本身就是结论的一部分。</p>
+<h3>4.1 维度样本缺口（哪些分组还没达标、还差多少条）</h3>
+<p>缺口条数 = 把该维度所有未达标组补到门槛 30 条所需的总条数；它只说明「要补多少」，不代表补完就有差异。</p>
+<table>
+<tr><th>维度</th><th>组数</th><th>达标组数</th><th>未达标组数</th><th>缺口条数</th></tr>
+<tr><td>major</td><td>6</td><td>3</td><td>3</td><td>50</td></tr>
+<tr><td>city</td><td>47</td><td>29</td><td>18</td><td>40</td></tr>
+<tr><td>education</td><td>5</td><td>3</td><td>2</td><td>29</td></tr>
+<tr><td>direction</td><td>3</td><td>3</td><td>0</td><td>0</td></tr>
+</table>
+<h2>五、分析明细</h2>
+<h3>5.1 学历维度</h3>
+<table>
+<tr><th>学历</th><th>平均期望薪资</th><th>人数</th><th>平均吸引力代理分（proxy）</th></tr>
+<tr><td>本科</td><td>8363.34</td><td>850</td><td>3.19</td></tr>
+<tr><td>硕士</td><td>9517.54</td><td>28</td><td>3.09</td></tr>
+<tr><td>博士</td><td>8082.5</td><td>3</td><td>2.67</td></tr>
+<tr><td>不限</td><td>6617.81</td><td>365</td><td>2.65</td></tr>
+<tr><td>大专</td><td>7020.44</td><td>618</td><td>2.92</td></tr>
+</table>
+<h3>5.2 实习经历维度</h3>
+<table>
+<tr><th>是否有实习经历</th><th>平均期望薪资</th><th>人数</th></tr>
+<tr><td>否</td><td>7855.39</td><td>1620</td></tr>
+<tr><td>是</td><td>5852.35</td><td>244</td></tr>
+</table>
+<h3>5.3 专业维度（薪资前 6）</h3>
+<table>
+<tr><th>专业</th><th>平均期望薪资</th><th>人数</th></tr>
+<tr><td>数据开发</td><td>8717.43</td><td>19</td></tr>
+<tr><td>数据治理</td><td>8287.5</td><td>10</td></tr>
+<tr><td>数据分析</td><td>7956.99</td><td>1116</td></tr>
+<tr><td>数据产品</td><td>7954.55</td><td>11</td></tr>
+<tr><td>算法</td><td>7371.32</td><td>50</td></tr>
+<tr><td>其他</td><td>6943.98</td><td>658</td></tr>
+</table>
+<h3>5.4 毕业去向维度</h3>
+<table>
+<tr><th>毕业去向</th><th>平均期望薪资</th><th>人数</th><th>平均满意度</th><th>满意度中位数</th><th>满意度标准差</th></tr>
+<tr><td>社招</td><td>7855.39</td><td>1620</td><td>2.94</td><td>3.1</td><td>0.64</td></tr>
+<tr><td>校招</td><td>7851.06</td><td>94</td><td>3.19</td><td>3.4</td><td>0.69</td></tr>
+<tr><td>实习</td><td>4599.82</td><td>150</td><td>3.43</td><td>3.5</td><td>0.57</td></tr>
+</table>
+<h3>5.5 城市维度（主要城市）</h3>
+<table>
+<tr><th>工作城市</th><th>平均期望薪资</th><th>人数</th></tr>
+<tr><td>北京</td><td>9790.64</td><td>68</td></tr>
+<tr><td>深圳</td><td>9553.12</td><td>75</td></tr>
+<tr><td>上海</td><td>8948.57</td><td>71</td></tr>
+<tr><td>南京</td><td>8795.08</td><td>48</td></tr>
+<tr><td>广州</td><td>8329.13</td><td>53</td></tr>
+<tr><td>武汉</td><td>7900.96</td><td>51</td></tr>
+</table>
+<h3>5.6 专业 × 城市（平均期望薪资）</h3>
+<table>
+<tr><th>专业</th><th>上海</th><th>北京</th><th>广州</th><th>深圳</th><th>武汉</th><th>南京</th></tr>
+<tr><td>数据开发</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>数据治理</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>数据分析</td><td>8969.27</td><td>9790.64</td><td>8348.88</td><td>9513.86</td><td>7822.02</td><td>8811.89</td></tr>
+<tr><td>数据产品</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>算法</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>其他</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+</table>
+<blockquote>空白表示该组合「无样本」或「样本量低于 30」——小样本均值不作为结果展示（不是 0 元）。</blockquote>
+<h3>5.7 专业 × 城市（该组合的样本量）</h3>
+<table>
+<tr><th>专业</th><th>上海</th><th>北京</th><th>广州</th><th>深圳</th><th>武汉</th><th>南京</th></tr>
+<tr><td>数据开发</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>数据治理</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>数据分析</td><td>70.0</td><td>68.0</td><td>50.0</td><td>71.0</td><td>34.0</td><td>39.0</td></tr>
+<tr><td>数据产品</td><td></td><td></td><td></td><td>1.0</td><td>1.0</td><td></td></tr>
+<tr><td>算法</td><td></td><td></td><td></td><td></td><td>3.0</td><td></td></tr>
+<tr><td>其他</td><td>1.0</td><td></td><td>3.0</td><td>3.0</td><td>13.0</td><td>9.0</td></tr>
+</table>
+<h3>5.8 一线 vs 新一线</h3>
+<table>
+<tr><th>一线平均</th><th>新一线平均</th><th>一线样本数</th><th>新一线样本数</th></tr>
+<tr><td>9209.89</td><td>8482.05</td><td>267</td><td>255</td></tr>
+</table>
+<h3>5.9 城市排序的权重敏感性（换权重重算，看排序会不会翻）</h3>
+<p>查询条件（由数据自动选取，不是预设）：专业=数据分析，学历=本科，实习=否，期望薪资=不限。</p>
+<table>
+<tr><th>权重场景</th><th>TOP1 城市</th><th>与默认排序的秩相关</th><th>TOP1 是否一致</th></tr>
+<tr><td>默认 0.5 / 0.3 / 0.2</td><td>北京</td><td>1.0</td><td>一致</td></tr>
+<tr><td>只看就业机会</td><td>上海</td><td>0.927</td><td>不一致</td></tr>
+<tr><td>只看满意度</td><td>东莞</td><td>0.582</td><td>不一致</td></tr>
+<tr><td>只看薪资</td><td>北京</td><td>0.747</td><td>一致</td></tr>
+<tr><td>三者均等</td><td>北京</td><td>0.989</td><td>一致</td></tr>
+<tr><td>与默认相反 0.2 / 0.3 / 0.5</td><td>北京</td><td>0.949</td><td>一致</td></tr>
+</table>
+<blockquote>每一行的排序都是当次现算的；秩相关为 Spearman 相关系数，越接近 1 说明排序越不受权重影响。</blockquote>
+<blockquote>城市列里的「无 / 未填」等占位值不是城市，已从排序中排除（见 src/config.py::CITY_UNSPECIFIED）。</blockquote>
+<h2>六、行动建议（描述性，不是预测）</h2>
+<blockquote>下面每张卡都由上面的统计表机械推出：换一批数据重跑，结论就会跟着变。强度按样本量、效应量与稳健性判定；标「弱」的不要直接当决策依据。每条卡都带「证据」与「出处」，可顺着出处核对原始数字。</blockquote>
+<table>
+<tr><th>卡片</th><th>发现</th><th>建议</th><th>强度</th><th>证据</th><th>出处</th></tr>
+<tr><td>投递方向优先级</td><td>「数据分析」P50 7500 元、样本 1116 条；整体 P50 7000 元</td><td>主攻「数据分析」方向，次选「算法」（P50 6980 元）</td><td>中</td><td>数据分析 n=1116；P50=7500；整体 P50=7000</td><td>ads_group_stats(dimension=major)；报告 5.3 专业薪资</td></tr>
+<tr><td>投递城市优先级</td><td>机会指数最高的是「深圳」（n=75、P50 9500 元、指数 0.075）</td><td>首投「深圳」，备选「杭州」</td><td>弱</td><td>机会指数 = 样本占比 × (P50 / 整体 P50)；深圳 指数 0.075</td><td>ads_group_stats(dimension=city)；报告 5.5 城市对比</td></tr>
+<tr><td>一线 vs 新一线</td><td>均值差 +728 元（n=267/255），Holm p=0.111，d=+0.19；判定：差异不显著</td><td>校正后不显著 → 按生活成本与岗位匹配度选，不要为「一线」额外加价</td><td>弱</td><td>均值差 +728；Holm p=0.111；d=+0.19</td><td>ads_comparisons(city_tier1_vs_new_tier1)；报告 3. 对比与显著性检验</td></tr>
+<tr><td>学历投入的边际回报</td><td>P50 最高「本科」8000 元（n=850），次高「大专」6500 元，差 +1500 元</td><td>高学历组样本不足或未达标 → 先补样本再谈学历回报</td><td>弱</td><td>档位差 +1500；最高档 n=850</td><td>ads_group_stats(dimension=education)；ads_comparisons(edu_*)</td></tr>
+<tr><td>实习岗值不值得优先</td><td>按岗位类型分层后，没有「同类岗位里同时有实习与非实习」的可比组合</td><td>先把样本按岗位类型补齐（同类岗位各抓到实习与非实习），再判断实习是否值得优先</td><td>弱</td><td>分层组合 3 行，可比组合 0</td><td>results.intern_by_job_type；报告 5.x 分层表</td></tr>
+<tr><td>城市结论的稳健性</td><td>6 组权重场景中，TOP1 变化 2 次</td><td>2/6 组权重下 TOP1 会变 → 城市结论只能说「量级可信、排序需谨慎」</td><td>弱</td><td>变化 2/6</td><td>results.recommend_sensitivity；报告 5.9 权重敏感性</td></tr>
+<tr><td>这批结论能下到什么程度</td><td>23 个分组样本不足 30；数据质量体检有 1 项提示；方向归类覆盖率 66.0% 低于阈值</td><td>按「先补样本、再看结论」的顺序行动：上面带「弱」的卡片先别当决策依据</td><td>弱</td><td>不足分组 23/61；体检提示 1 项；归类覆盖率 66.0%；薪资可解析 99.9%</td><td>results.quality；results.group_stats；数据集旁注 meta</td></tr>
+</table>
+<blockquote>卡片生成规则见 README「行动建议是怎么来的」一节；程序内不写死任何建议文案里的数字。</blockquote>
+<h2>七、图表</h2>
+<h3>学历_薪资</h3>
+<p><img alt="学历_薪资" src="../output/01_学历_平均期望薪资.png"></p>
+<h3>学历_满意度</h3>
+<p><img alt="学历_满意度" src="../output/02_学历_平均满意度.png"></p>
+<h3>实习_箱线图</h3>
+<p><img alt="实习_箱线图" src="../output/03_实习经历_薪资分布.png"></p>
+<h3>专业_薪资</h3>
+<p><img alt="专业_薪资" src="../output/04_专业_平均薪资TOP.png"></p>
+<h3>去向_薪资</h3>
+<p><img alt="去向_薪资" src="../output/05_毕业去向_平均薪资.png"></p>
+<h3>去向_满意度</h3>
+<p><img alt="去向_满意度" src="../output/06_毕业去向_满意度分布.png"></p>
+<h3>城市_薪资</h3>
+<p><img alt="城市_薪资" src="../output/07_城市_平均薪资.png"></p>
+<h3>一线vs新一线</h3>
+<p><img alt="一线vs新一线" src="../output/08_一线vs新一线_薪资.png"></p>
+<h3>专业城市_热力图</h3>
+<p><img alt="专业城市_热力图" src="../output/09_专业城市_薪资热力图.png"></p>
+<h2>八、数据质量体检（自动算出的可疑之处）</h2>
+<p>在给结论之前，先检查这批数据本身是否站得住：缺失、重复、取值集中度，以及「这个维度到底有没有区分度」。全部现算，不含任何预设判断。</p>
+<h3>8.1 缺失率</h3>
+<table>
+<tr><th>列</th><th>缺失率（%）</th></tr>
+<tr><td>publish_date</td><td>100.0</td></tr>
+<tr><td>jd_text</td><td>99.84</td></tr>
+<tr><td>skills</td><td>47.48</td></tr>
+<tr><td>finance_stage</td><td>26.56</td></tr>
+<tr><td>welfare</td><td>21.78</td></tr>
+<tr><td>business_district</td><td>13.04</td></tr>
+<tr><td>city_district</td><td>12.98</td></tr>
+<tr><td>experience_required</td><td>8.15</td></tr>
+<tr><td>salary_upper</td><td>0.11</td></tr>
+<tr><td>salary_lower</td><td>0.11</td></tr>
+<tr><td>salary_band_ratio</td><td>0.11</td></tr>
+<tr><td>学历</td><td>0.0</td></tr>
+<tr><td>是否有实习经历</td><td>0.0</td></tr>
+<tr><td>毕业去向</td><td>0.0</td></tr>
+<tr><td>期望薪资</td><td>0.0</td></tr>
+<tr><td>专业</td><td>0.0</td></tr>
+<tr><td>company_size_rank</td><td>0.0</td></tr>
+<tr><td>experience_rank</td><td>0.0</td></tr>
+<tr><td>company_size</td><td>0.0</td></tr>
+<tr><td>industry</td><td>0.0</td></tr>
+<tr><td>job_title</td><td>0.0</td></tr>
+<tr><td>company</td><td>0.0</td></tr>
+<tr><td>工作城市</td><td>0.0</td></tr>
+<tr><td>job_id</td><td>0.0</td></tr>
+<tr><td>满意度评分</td><td>0.0</td></tr>
+<tr><td>salary_unit</td><td>0.0</td></tr>
+<tr><td>job_type</td><td>0.0</td></tr>
+<tr><td>salary_months</td><td>0.0</td></tr>
+<tr><td>jd_len</td><td>0.0</td></tr>
+<tr><td>detail_status</td><td>0.0</td></tr>
+<tr><td>source</td><td>0.0</td></tr>
+<tr><td>crawled_at</td><td>0.0</td></tr>
+</table>
+<h3>8.2 体检结论</h3>
+<table>
+<tr><th>检查项</th><th>本次实测</th><th>判定</th></tr>
+<tr><td>完全重复的行</td><td>0 行（占 0.00%）</td><td>无重复</td></tr>
+<tr><td>缺失率最高的列</td><td>publish_date：100.00%（1864 条）</td><td>提示：缺失率偏高</td></tr>
+<tr><td>学历 取值集中度</td><td>取值 5 个｜最大占比 45.6%（本科）</td><td>分布正常</td></tr>
+<tr><td>专业 取值集中度</td><td>取值 6 个｜最大占比 59.9%（数据分析）</td><td>分布正常</td></tr>
+<tr><td>是否有实习经历 取值集中度</td><td>取值 2 个｜最大占比 86.9%（否）</td><td>分布正常</td></tr>
+<tr><td>毕业去向 取值集中度</td><td>取值 3 个｜最大占比 86.9%（社招）</td><td>分布正常</td></tr>
+<tr><td>工作城市 取值集中度</td><td>取值 47 个｜最大占比 4.3%（成都）</td><td>分布正常</td></tr>
+<tr><td>学历 → 期望薪资</td><td>5 组｜ANOVA p=6.47e-26｜eta²=0.065（解释力 6.5%）</td><td>有区分度</td></tr>
+<tr><td>学历 → 满意度评分</td><td>5 组｜ANOVA p=7.27e-43｜eta²=0.104（解释力 10.4%）</td><td>有区分度</td></tr>
+<tr><td>专业 → 期望薪资</td><td>6 组｜ANOVA p=3.37e-09｜eta²=0.026（解释力 2.6%）</td><td>有区分度</td></tr>
+<tr><td>专业 → 满意度评分</td><td>6 组｜ANOVA p=4.01e-10｜eta²=0.028（解释力 2.8%）</td><td>有区分度</td></tr>
+<tr><td>是否有实习经历 → 期望薪资</td><td>2 组｜ANOVA p=1.82e-21｜eta²=0.047（解释力 4.7%）</td><td>有区分度</td></tr>
+<tr><td>是否有实习经历 → 满意度评分</td><td>2 组｜ANOVA p=1.15e-19｜eta²=0.043（解释力 4.3%）</td><td>有区分度</td></tr>
+<tr><td>毕业去向 → 期望薪资</td><td>3 组｜ANOVA p=4.19e-35｜eta²=0.082（解释力 8.2%）</td><td>有区分度</td></tr>
+<tr><td>毕业去向 → 满意度评分</td><td>3 组｜ANOVA p=2.35e-20｜eta²=0.047（解释力 4.7%）</td><td>有区分度</td></tr>
+<tr><td>工作城市 → 期望薪资</td><td>47 组｜ANOVA p=4.86e-30｜eta²=0.128（解释力 12.8%）</td><td>有区分度</td></tr>
+<tr><td>工作城市 → 满意度评分</td><td>47 组｜ANOVA p=2.73e-31｜eta²=0.131（解释力 13.1%）</td><td>有区分度</td></tr>
+<tr><td>期望薪资分布形态</td><td>偏度 0.88｜峰度 0.57｜均值/中位数 1.08</td><td>近似对称</td></tr>
+<tr><td>期望薪资高值占比</td><td>4.3% 的样本 &gt; 2×中位数（14000 元）</td><td>无明显聚集</td></tr>
+<tr><td>满意度取值分布</td><td>取值 20 个｜最常见 2.0（占 18.9%）｜标准差 0.65</td><td>分布正常</td></tr>
+</table>
+<blockquote>判定阈值：组间解释力 eta² &lt; 0.01 记「几乎不解释差异」；缺失率 &gt; 10% 记「偏高」；单一取值占比 ≥ 90% 记「过度集中」。</blockquote>
+<blockquote>eta² = 组间平方和 / 总平方和（单因素 ANOVA）：0 = 该维度完全不能区分，1 = 完全区分。</blockquote>
+<blockquote>体检只报现象：不解释原因，也不预测。</blockquote>
+<h2>九、方法与局限</h2>
+<p><strong>数据清洗</strong></p>
+<li>无效值：期望薪资 ≤ 0 的行视为无效记录，直接剔除（不参与填充与统计）。</li>
+<li>缺失值：分类变量用众数、连续变量用中位数填充（中位数抗异常值）。</li>
+<li>异常值：对「期望薪资」用 IQR 法（Q1−1.5·IQR ~ Q3+1.5·IQR）剔除，具体剔除行数见第二节（报告不复述固定比例）。</li>
+<p><strong>统计方法</strong></p>
+<li>均值差 + 95% 置信区间：Welch–Satterthwaite 自由度下的区间估计（不假设方差相等）。</li>
+<li>显著性检验：Welch t 检验（不等方差）；另用 Mann-Whitney U 秩检验做稳健性对照（薪资右偏，秩检验不依赖正态假设）。</li>
+<li>效应量：Cohen's d（合并标准差），用于区分「显著但很小」和「显著且明显」。</li>
+<li>最小样本量门槛：任一组低于 30 条即不给结论。</li>
+<p><strong>多重比较</strong></p>
+<li>同一次运行的多组对比按 Holm 法校正 p 值（family-wise error rate），避免组数一多就靠 α 刷出假阳性。</li>
+<p><strong>数据质量体检</strong></p>
+<li>第七节用单因素 ANOVA 的 eta²（组间平方和 / 总平方和）判断每个维度对指标的区分度，只报现象，不解释原因。</li>
+<p><strong>不做预测</strong></p>
+<li>本报告不含任何预测内容：没有趋势外推、没有个体结果预测、没有「应该去哪」的建议。</li>
+<li>「城市排序」一节是对已收集样本的描述性排序（就业人数 / 满意度 / 薪资三个实测指标），不是预测，也不构成任何决策建议。</li>
+<p><strong>局限</strong></p>
+<li>描述性统计只说明「相关」，<strong>不能推出因果</strong>。</li>
+<li>样本若非随机抽样，结论不可外推到总体。</li>
+<li>IQR 剔除会去掉一部分高端样本，平均值可能被低估；剔除行数已在上文列出。</li>
+<p>---</p>
+<p>本文件由程序生成（<code>output/report.md</code>）。同一份数据文件 + 同一组参数重跑 <code>python main.py</code>，可复现同一批数字（仅「生成时间」不同）。</p></body></html>

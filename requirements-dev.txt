@@ -7,3 +7,5 @@ pytest>=7.0
 
 # 静态检查（只查「确定是问题」的规则，见 pyproject.toml 的 [tool.ruff.lint]）
 ruff>=0.6
+mypy>=1.10
+pytest-cov>=5.0

@@ -24,6 +24,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      - name: 检查仓库里没有凭据文件（5.4）
+        run: |
+          # 任何被 git 跟踪的 cookie/.env/密钥文件都直接失败（.env.example 除外）
+          leaks=$(git ls-files | grep -iE '(^|/)(cookie|secrets?|credentials)(\.[a-z]+)?$|\.env$' | grep -v '\.env\.example' || true)
+          if [ -n "$leaks" ]; then
+            echo "::error::仓库里不允许出现凭据文件：$leaks"
+            exit 1
+          fi
+          echo "OK：未发现被跟踪的凭据文件"
+
       - name: 安装依赖
         run: pip install -r requirements-dev.txt
 

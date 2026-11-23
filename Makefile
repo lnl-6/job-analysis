@@ -1,5 +1,5 @@
 # 常用命令（Linux / macOS / CI；Windows 下可用 Git Bash，或直接跑 README 里的 PowerShell 命令）
-.PHONY: help install test lint run crawl publish sqlite mysql-up mysql-load mysql-down clean
+.PHONY: coverage help install test lint run crawl publish sqlite mysql-up mysql-load mysql-down clean
 
 help:  ## 显示可用命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -39,3 +39,5 @@ mysql-down:  ## 停掉容器（数据卷保留，下次起来数据还在）
 
 clean:  ## 清理本地生成物（报告与图表保留）
 	rm -rf .pytest_cache .ruff_cache output/employment_analysis.db
+coverage:  ## 覆盖率报告（HTML 输出到 htmlcov/）
+	python -m pytest -q tests --cov --cov-report=term-missing --cov-report=html

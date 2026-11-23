@@ -31,3 +31,20 @@ select = ["E9", "F"]
 # 测试与脚本需要在导入前把仓库根目录加进 sys.path
 "tests/*" = ["E402"]
 "scripts/*" = ["E402"]
+
+[tool.mypy]
+# 渐进式类型检查：先只要求 src/ 内部能跑通，不要求第三方库有类型
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = false
+exclude = "(^legacy/|^job-analysis/|^output/|^data/)"
+files = ["src"]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/sources/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
