@@ -166,3 +166,40 @@ jobs:
           python scripts/load_to_mysql.py \
             --backend mysql --host 127.0.0.1 --user root --password employment \
             --checks-only
+
+  windows:
+    name: Windows + GBK（本机真实环境回归）
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: 用测试夹具生成数据集（仓库不携带数据文件）
+        run: |
+          python tests/_fixtures.py --jsonl boss_fixture.jsonl
+          python -m src.sources.boss --raw boss_fixture.jsonl --out data/raw/boss_岗位数据集.csv
+
+      - name: 全流程（GBK 控制台——线上真正会踩的那个坑）
+        env:
+          PYTHONIOENCODING: gbk
+        run: python main.py --top 4
+
+      - name: 断言报告与图表存在
+        run: |
+          if (-not (Test-Path output/report.md)) { throw "output/report.md 缺失" }
+          $charts = (Get-ChildItem output/*.png -ErrorAction SilentlyContinue).Count
+          if ($charts -lt 9) { throw "图表数量不足：$charts" }
+          Get-Content output/report.md -Encoding UTF8 -TotalCount 3
+
+      - name: 测试（Windows 下跑全部用例）
+        run: python -m pytest -q tests -p no:cacheprovider

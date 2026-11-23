@@ -30,11 +30,17 @@ def _signed(value: float) -> str:
     return f"{value:+.0f}" if value == value else "N/A"
 
 
-def build_conclusions(results: dict[str, object]) -> list[str]:
+def build_conclusions(
+    results: dict[str, object],
+    satisfaction_term: str = config.DEFAULT_SATISFACTION_TERM,
+) -> list[str]:
     """把本次运行的统计结果翻译成句子。
 
     硬规则：这里不允许出现任何写死的数值或结论——每句话的数字都取自 results，
     判定取自 stats.Comparison.verdict。
+
+    ``satisfaction_term`` 是「满意度」列在当前数据源下的口径名：
+    岗位数据里它是吸引力代理分，不能继续叫满意度。
     """
     conclusions: list[str] = []
 
@@ -62,7 +68,15 @@ def build_conclusions(results: dict[str, object]) -> list[str]:
             if cmp.significant
             else "本样本不支持「两组有差异」的判断。"
         )
-        conclusions.append(f"{head}，{detail}；→ {cmp.verdict}：{tail}")
+        line = f"{head}，{detail}；→ {cmp.verdict}：{tail}"
+        # 岗位数据里「是否实习」≈ 岗位类型：直接比较会把类型差异说成实习经历的作用。
+        layered = results.get("intern_by_job_type")
+        if str(getattr(cmp, "key", "")) == "intern_yes_vs_no" and isinstance(layered, pd.DataFrame) and not layered.empty:
+            line += (
+                "（注意：这批数据里「是否实习」与岗位类型高度重合，"
+                "该差值**不可解释为实习经历带来的影响**，分层见第 3.1 节）"
+            )
+        conclusions.append(line)
 
     # ---- 专业维度：只有样本量达标的专业才参与排名 ----
     major_df = results.get("major_top")
@@ -156,7 +170,7 @@ def build_conclusions(results: dict[str, object]) -> list[str]:
             f"**整体概况**：有效样本 {int(ov['样本量'])} 条，平均期望薪资 {mean:.0f} 元"
             f"（95% 置信区间 [{lo_ci:.0f}, {hi_ci:.0f}]，中位数 "
             f"{float(ov['期望薪资中位数']):.0f} 元），"
-            f"平均满意度 {float(ov['平均满意度']):.2f} / 5，"
+            f"{satisfaction_term} {float(ov['平均满意度']):.2f} / 5，"
             f"有实习经历者占比 {float(ov['有实习占比']):.1f}%。"
         )
 
@@ -197,6 +211,29 @@ def build_conclusions(results: dict[str, object]) -> list[str]:
             + "；".join(flagged)
             + "。这只说明「这批数据在这些维度上区分不出来」，不代表现实世界如此。"
         )
+
+    # ---- 缺失最严重的那一列（结论里必须落到列名，不能只说「某列」）----
+    missing = quality_result.get("missing") if isinstance(quality_result, dict) else None
+    if isinstance(missing, dict) and missing:
+        worst_column = max(missing, key=lambda key: float(missing[key]))
+        conclusions.append(
+            f"**缺失最多的一列**：`{worst_column}` 缺失 {float(missing[worst_column]):.2f}%"
+            f"（共 {len(missing)} 列存在缺失，逐列见第七节）；"
+            "缺失会削弱对应维度的可比性，但不会改变已给出的均值与判定。"
+        )
+
+    # ---- 样本缺口：哪些维度还没凑够样本，缺多少 ----
+    gaps = _sample_gap_frame(results)
+    if not gaps.empty:
+        short = gaps[gaps["缺口条数"] > 0]
+        if not short.empty:
+            worst_gap = short.sort_values("缺口条数", ascending=False).iloc[0]
+            conclusions.append(
+                f"**样本缺口**：{len(short)}/{len(gaps)} 个维度还有未达标分组，缺口最大的是"
+                f"「{worst_gap['维度']}」（{int(worst_gap['达标组数'])}/{int(worst_gap['组数'])} 组达标，"
+                f"还差 {int(worst_gap['缺口条数'])} 条才能把全部组补到门槛 {config.MIN_GROUP_SIZE}）；"
+                "明细见第 4.1 节——「缺样本就不给结论」本身就是结论的一部分。"
+            )
 
     return conclusions
 
@@ -312,6 +349,52 @@ def provenance_lines(info: DataSourceInfo, results: dict[str, object]) -> list[s
     # 所以口径声明必须紧贴在「数据性质」旁边，而不是只写在 README 里。
     if note:
         lines.append(f"- 数据口径：**{note[0]}** —— {note[1]}")
+
+    # 采集与覆盖：抓了多少 / 能解析多少 / 归类到什么程度。
+    # 缺了这三行，读者无法判断「结论能推广到哪」。
+    meta = info.meta if isinstance(info.meta, dict) else {}
+    manifest = meta.get("manifest") if isinstance(meta.get("manifest"), dict) else {}
+    if manifest.get("quota"):
+        quota = int(manifest["quota"])
+        done = int(manifest.get("quota_done") or 0)
+        lines.append(
+            f"- 抽样完整度：目标 {quota} 页／成功 {done} 页 → 配额完成率 {done / quota:.1%}"
+            f"（关键词 {len(manifest.get('queries') or [])} 个 × "
+            f"城市 {len(manifest.get('cities') or [])} 个 × 页 {manifest.get('pages_per_combo')} × "
+            f"轮 {manifest.get('rounds_requested')}；抓取退出码 {manifest.get('exit_code')}）"
+        )
+    elif meta.get("rows"):
+        # 老清单没有配额字段时，至少如实报出「这批数据的规模与来源」
+        totals = manifest.get("totals") if isinstance(manifest.get("totals"), dict) else {}
+        lines.append(
+            f"- 采集规模：{int(meta.get('rows') or 0)} 条记录｜"
+            f"唯一岗位 {meta.get('unique_jobs') if meta.get('unique_jobs') is not None else '未知'} 个｜"
+            f"{meta.get('cities') if meta.get('cities') is not None else '未知'} 个城市"
+            f"（清单页面数 {totals.get('pages', '未知')}；配额完成率见 docs/data_source_boss.md 的局限说明）"
+        )
+    if meta:
+        coverage = meta.get("major_coverage") if isinstance(meta.get("major_coverage"), dict) else {}
+        salary_cov = meta.get("salary_coverage") if isinstance(meta.get("salary_coverage"), dict) else {}
+        if coverage.get("coverage") is not None:
+            ratio = float(coverage["coverage"])
+            warning = ""
+            if ratio < config.MAJOR_COVERAGE_WARN:
+                warning = (
+                    f"；**低于阈值 {config.MAJOR_COVERAGE_WARN:.0%}**——"
+                    "说明关键词表还跟不上岗位命名，「其他」这一组的数字不能当成一个方向来读"
+                )
+            lines.append(
+                f"- 方向归类覆盖率：{ratio:.1%}"
+                f"（未归类 {int(coverage.get('unclassified') or 0)} 条，"
+                f"占 {float(coverage.get('other_share') or 0):.1%}{warning}）"
+            )
+        if salary_cov.get("ratio") is not None:
+            lines.append(
+                f"- 薪资可解析占比：{float(salary_cov['ratio']):.1%}"
+                f"（{int(salary_cov.get('parsed') or 0)}/{int(salary_cov.get('rows') or 0)} 条；"
+                "「面议」与解析失败的不计入，均值只覆盖可解析样本）"
+            )
+
     lines += [
         f"- 运行参数：专业维度取前 {top_n} 名",
         f"- 判定阈值：最小样本量 {config.MIN_GROUP_SIZE}｜显著性水平 α={config.ALPHA}｜"
@@ -341,6 +424,43 @@ def _missing_frame(results: dict[str, object]) -> pd.DataFrame:
     return frame.sort_values("缺失率（%）", ascending=False).reset_index(drop=True)
 
 
+def _sample_gap_frame(results: dict[str, object]) -> pd.DataFrame:
+    """每个维度还缺多少条样本才能让所有分组达标（由 group_stats 现算）。
+
+    列：维度 / 组数 / 达标组数 / 未达标组数 / 缺口条数（把未达标组补到门槛所需条数之和）。
+    """
+    stats_frame = results.get("group_stats")
+    if not isinstance(stats_frame, pd.DataFrame) or stats_frame.empty:
+        return pd.DataFrame()
+    if not {"dimension", "sample_size"}.issubset(stats_frame.columns):
+        return pd.DataFrame()
+
+    rows: list[dict[str, object]] = []
+    for dimension, block in stats_frame.groupby("dimension"):
+        sizes = pd.to_numeric(block["sample_size"], errors="coerce").fillna(0).astype(int)
+        enough = int((sizes >= config.MIN_GROUP_SIZE).sum())
+        short = int((sizes < config.MIN_GROUP_SIZE).sum())
+        gap = int(sum(max(0, config.MIN_GROUP_SIZE - size) for size in sizes))
+        rows.append(
+            {
+                "维度": dimension,
+                "组数": int(len(sizes)),
+                "达标组数": enough,
+                "未达标组数": short,
+                "缺口条数": gap,
+            }
+        )
+    frame = pd.DataFrame(rows)
+    return frame.sort_values(["缺口条数", "维度"], ascending=[False, True]).reset_index(drop=True)
+
+
+def _satisfaction_column(frame: pd.DataFrame, term: str) -> pd.DataFrame:
+    """把表格里的「平均满意度」列换成当前数据源的口径名（岗位数据 → 代理分）。"""
+    if isinstance(frame, pd.DataFrame) and term and term != "平均满意度" and "平均满意度" in frame.columns:
+        return frame.rename(columns={"平均满意度": term})
+    return frame
+
+
 def write_markdown_report(
     info: DataSourceInfo,
     report: CleaningReport,
@@ -353,6 +473,7 @@ def write_markdown_report(
     path = out_dir / "report.md"
 
     note = config.source_note_for(info.path.name)
+    satisfaction_term = config.satisfaction_term_for(info.path.name)
     title = f"# 就业数据分析报告（{note[0]}）" if note else "# 就业数据分析报告"
     lines: list[str] = [
         title,
@@ -385,13 +506,49 @@ def write_markdown_report(
         "Cohen's d 是效应量（0.2 小 / 0.5 中 / 0.8 大）。",
         "> **显著 ≠ 因果，也不等于总体如此**：这里只报告「本样本里两组均值差多大、有多不确定」。",
         "",
+    ]
+
+    layered = results.get("intern_by_job_type")
+    if isinstance(layered, pd.DataFrame) and not layered.empty:
+        lines += [
+            "### 3.1 混杂与不比较（岗位类型 × 是否实习）",
+            "",
+            "「是否实习」在岗位数据里与岗位类型（实习 / 校招 / 社招）几乎重合：实习岗天然属于实习类型，"
+            "「非实习」里混着校招与社招。因此「实习 vs 非实习」的差值**不能读成「实习经历值多少钱」**，"
+            "它至少混入了岗位类型、经验门槛与公司类型三种差异。",
+            "下表把两维拆开：只有当同一岗位类型内部的两格都达到样本量门槛时，"
+            "才可能谈「实习本身」的差异；其余格子只列数字、不下结论。",
+            "",
+            _df_to_markdown(layered),
+            "",
+        ]
+
+    lines += [
         "## 四、核心结论（由上一节与明细表推导）",
         "",
     ]
     lines += [f"{i}. {c}" for i, c in enumerate(conclusions, 1)]
 
+    gaps = _sample_gap_frame(results)
+    if not gaps.empty:
+        lines += [
+            "",
+            "### 4.1 维度样本缺口（哪些分组还没达标、还差多少条）",
+            "",
+            "缺口条数 = 把该维度所有未达标组补到门槛 "
+            f"{config.MIN_GROUP_SIZE} 条所需的总条数；它只说明「要补多少」，不代表补完就有差异。",
+            "",
+            _df_to_markdown(gaps),
+            "",
+        ]
+
     lines += ["", "## 五、分析明细", ""]
-    lines += ["### 5.1 学历维度", "", _df_to_markdown(results["edu"]), ""]  # type: ignore[arg-type]
+    lines += [
+        "### 5.1 学历维度",
+        "",
+        _df_to_markdown(_satisfaction_column(results["edu"], satisfaction_term)),  # type: ignore[arg-type]
+        "",
+    ]
     lines += ["### 5.2 实习经历维度", "", _df_to_markdown(results["intern"]), ""]  # type: ignore[arg-type]
     lines += [
         f"### 5.3 专业维度（薪资前 {len(results['major_top'])}）",  # type: ignore[arg-type]

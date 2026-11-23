@@ -24,23 +24,23 @@ DROP VIEW IF EXISTS v_fact_long;
 CREATE VIEW v_fact_long AS
 SELECT 'education' AS dimension, e.education AS group_value,
        f.expected_salary, f.satisfaction, f.has_internship
-FROM dwd_survey_clean f
+FROM dwd_boss_jobs f
 JOIN dim_education e ON e.education_key = f.education_key
 UNION ALL
 SELECT 'major', m.major, f.expected_salary, f.satisfaction, f.has_internship
-FROM dwd_survey_clean f
+FROM dwd_boss_jobs f
 JOIN dim_major m ON m.major_key = f.major_key
 UNION ALL
 SELECT 'city', c.city, f.expected_salary, f.satisfaction, f.has_internship
-FROM dwd_survey_clean f
+FROM dwd_boss_jobs f
 JOIN dim_city c ON c.city_key = f.city_key
 UNION ALL
 SELECT 'direction', d.direction, f.expected_salary, f.satisfaction, f.has_internship
-FROM dwd_survey_clean f
+FROM dwd_boss_jobs f
 JOIN dim_direction d ON d.direction_key = f.direction_key
 UNION ALL
 SELECT 'industry', i.industry, f.expected_salary, f.satisfaction, f.has_internship
-FROM dwd_survey_clean f
+FROM dwd_boss_jobs f
 JOIN dim_industry i ON i.industry_key = f.industry_key;
 
 -- -----------------------------------------------------------------------------

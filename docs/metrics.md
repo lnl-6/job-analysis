@@ -75,7 +75,7 @@ significant = sample_ok 且 p_holm < config.ALPHA（0.05）
 
 | 情况 | 处理 | 为什么 |
 | --- | --- | --- |
-| 期望薪资缺失 | 用**中位数**填充，并在 `dwd_survey_clean.salary_is_filled` 标记 | 薪资右偏，中位数抗异常值；标记保留可追溯性 |
+| 期望薪资缺失 | 用**中位数**填充，并在 `dwd_boss_jobs.salary_is_filled` 标记 | 薪资右偏，中位数抗异常值；标记保留可追溯性 |
 | 期望薪资 ≤ 0 | **剔除**（`src/cleaner.py::drop_invalid_salary`），计入 `ads_run_meta.rows_invalid_salary` | 负薪资是无效记录，不是缺失值，填不了 |
 | 满意度缺失 | 用中位数填充，`satisfaction_is_filled` 标记 | 同上 |
 | 实习经历缺失 | 用**众数**填充 | 分类变量 |
@@ -114,6 +114,8 @@ significant = sample_ok 且 p_holm < config.ALPHA（0.05）
 ---
 
 ### 8. 同一列名，两种数据源（问卷 vs 岗位）
+
+> 问卷数据源已下线；本节保留作为口径演变的记录，当前项目只处理岗位数据。
 
 `src/sources/boss.py` 把 Boss 直聘岗位数据适配成同一套 7 列契约：**列名不变，语义变了**。
 

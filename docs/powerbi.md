@@ -28,7 +28,7 @@ python scripts/load_to_mysql.py --backend mysql --host 127.0.0.1 \
 
 | 用途 | 表 / 视图 | 说明 |
 | --- | --- | --- |
-| 星型模型（明细钻取） | `dwd_survey_clean` + 5 张 `dim_*` | 事实 + 维度，用于「按学历/城市/专业切片看薪资分布」 |
+| 星型模型（明细钻取） | `dwd_boss_jobs` + 5 张 `dim_*` | 事实 + 维度，用于「按学历/城市/专业切片看薪资分布」 |
 | 结果呈现（成品数字） | `ads_group_stats`、`ads_comparisons`、`ads_major_city_matrix`、`ads_weight_sensitivity`、`ads_quality_checks`、`ads_run_meta` | 与报告数字**同源**，直接拖字段即可 |
 | 人话标签 | `v_comparison_dashboard`、`v_city_major_gap`、`v_quality_flagged`、`v_latest_run` | 视图里已经带好 `significance_label`、`practical_note`、组内排名等 |
 
@@ -38,11 +38,11 @@ python scripts/load_to_mysql.py --backend mysql --host 127.0.0.1 \
 ## 3. 关系与建模
 
 ```
-dim_education 1 ── N dwd_survey_clean
-dim_major     1 ── N dwd_survey_clean
-dim_city      1 ── N dwd_survey_clean
-dim_direction 1 ── N dwd_survey_clean
-dim_industry  1 ── N dwd_survey_clean      （industry_key 可空，单向过滤）
+dim_education 1 ── N dwd_boss_jobs
+dim_major     1 ── N dwd_boss_jobs
+dim_city      1 ── N dwd_boss_jobs
+dim_direction 1 ── N dwd_boss_jobs
+dim_industry  1 ── N dwd_boss_jobs      （industry_key 可空，单向过滤）
 ads_run_meta  1 ── N ads_group_stats / ads_comparisons / ads_major_city_matrix / ads_weight_sensitivity / ads_quality_checks
 ```
 
@@ -59,28 +59,28 @@ ads_run_meta  1 ── N ads_group_stats / ads_comparisons / ads_major_city_matr
 整体指标（来源：事实表 —— 与 Python 侧同一个算术平均定义）：
 
 ```dax
-样本量 = COUNTROWS ( dwd_survey_clean )
+样本量 = COUNTROWS ( dwd_boss_jobs )
 
-平均期望薪资 = AVERAGE ( dwd_survey_clean[expected_salary] )
+平均期望薪资 = AVERAGE ( dwd_boss_jobs[expected_salary] )
 
-薪资中位数 = MEDIAN ( dwd_survey_clean[expected_salary] )
+薪资中位数 = MEDIAN ( dwd_boss_jobs[expected_salary] )
 
-P25 = PERCENTILE.INC ( dwd_survey_clean[expected_salary], 0.25 )
-P50 = PERCENTILE.INC ( dwd_survey_clean[expected_salary], 0.5 )
-P75 = PERCENTILE.INC ( dwd_survey_clean[expected_salary], 0.75 )
+P25 = PERCENTILE.INC ( dwd_boss_jobs[expected_salary], 0.25 )
+P50 = PERCENTILE.INC ( dwd_boss_jobs[expected_salary], 0.5 )
+P75 = PERCENTILE.INC ( dwd_boss_jobs[expected_salary], 0.75 )
 
-平均满意度 = AVERAGE ( dwd_survey_clean[satisfaction] )
+平均满意度 = AVERAGE ( dwd_boss_jobs[satisfaction] )
 
 实习率 =
 DIVIDE (
-    CALCULATE ( COUNTROWS ( dwd_survey_clean ), dwd_survey_clean[has_internship] = 1 ),
-    COUNTROWS ( dwd_survey_clean )
+    CALCULATE ( COUNTROWS ( dwd_boss_jobs ), dwd_boss_jobs[has_internship] = 1 ),
+    COUNTROWS ( dwd_boss_jobs )
 )
 
 填充样本占比 =
 DIVIDE (
-    CALCULATE ( COUNTROWS ( dwd_survey_clean ), dwd_survey_clean[salary_is_filled] = 1 ),
-    COUNTROWS ( dwd_survey_clean )
+    CALCULATE ( COUNTROWS ( dwd_boss_jobs ), dwd_boss_jobs[salary_is_filled] = 1 ),
+    COUNTROWS ( dwd_boss_jobs )
 )
 ```
 

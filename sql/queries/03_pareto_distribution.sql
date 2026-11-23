@@ -10,7 +10,7 @@ WITH ordered AS (
          ROW_NUMBER() OVER (ORDER BY f.expected_salary DESC) AS rn,
          COUNT(*)     OVER ()                                AS n,
          SUM(f.expected_salary) OVER ()                      AS total_salary
-  FROM dwd_survey_clean f
+  FROM dwd_boss_jobs f
 ),
 banded AS (
   SELECT expected_salary,

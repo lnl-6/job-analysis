@@ -7,6 +7,7 @@
    转成一行结构化记录；
 2. **映射**：把岗位字段映射到项目既有的 7 列分析契约（口径见 `docs/data_source_boss.md`）——
    **这是本项目从「问卷数据」切到「岗位数据」时唯一允许改语义的地方**；
+（问卷数据源已下线：下表仅作历史对照，项目现在只接受岗位数据。）
 3. **落盘**：输出 analysis-ready 的 CSV，并保留岗位侧扩展列。
 
 明确不做：不抓取（见 `scripts/crawl_boss.py`）、不统计（见 `src/analysis.py`）、不做预测。
@@ -42,12 +43,35 @@ from src import config
 # 常量
 # =============================================================================
 #: 岗位方向关键词表（顺序即优先级：先命中先归类）
+#: 扩充原则：只加「业务上确实属于某方向」的词；拿不准的宁可留进「其他」，
+#: 也不要为了把覆盖率刷好看而乱塞（见 scripts/audit_major_coverage.py）。
 MAJOR_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("数据分析", ("数据分析", "商业分析", "业务分析", "数据运营", "数据支持", "BI", "bi")),
-    ("数据开发", ("数据开发", "数据仓库", "数仓", "ETL", "etl", "数据工程", "大数据开发", "数据平台")),
-    ("算法", ("算法", "机器学习", "深度学习", "数据挖掘", "NLP", "自然语言", "计算机视觉", "视觉", "推荐", "大模型", "AI")),
-    ("数据治理", ("数据治理", "数据质量", "数据管理", "元数据", "数据标准")),
-    ("数据产品", ("数据产品", "产品经理")),
+    (
+        "数据分析",
+        (
+            "数据分析", "商业分析", "业务分析", "数据运营", "数据支持", "运营分析",
+            "报表分析", "经营分析", "BI", "bi", "数分",
+        ),
+    ),
+    (
+        "数据开发",
+        (
+            "数据开发", "数据仓库", "数仓", "ETL", "etl", "数据工程", "大数据开发",
+            "数据平台", "数据架构", "报表开发", "BI 开发", "BI开发", "湖仓", "实时计算",
+        ),
+    ),
+    (
+        "算法",
+        (
+            "算法", "机器学习", "深度学习", "数据挖掘", "NLP", "自然语言",
+            "计算机视觉", "视觉", "推荐", "大模型", "AI", "模型训练", "图像",
+        ),
+    ),
+    (
+        "数据治理",
+        ("数据治理", "数据质量", "数据管理", "元数据", "数据标准", "数据安全", "主数据"),
+    ),
+    ("数据产品", ("数据产品", "产品经理", "商业产品", "数据策略")),
 )
 DEFAULT_MAJOR = "其他"
 
@@ -495,10 +519,95 @@ def save_analysis_csv(frame: pd.DataFrame, out_path: str | Path) -> Path:
     return path
 
 
+def major_coverage(frame: pd.DataFrame) -> dict[str, Any]:
+    """方向归类覆盖率：已归类条数 / 总条数，以及「其他」占比。
+
+    覆盖率低说明关键词表跟不上平台命名，报告里必须显式报出来，
+    而不是让「其他」悄悄吃掉三分之一样本。
+    """
+    column = frame[config.COL_MAJOR].astype(str) if config.COL_MAJOR in frame.columns else pd.Series(dtype=str)
+    total = int(len(column))
+    other = int((column == DEFAULT_MAJOR).sum())
+    classified = total - other
+    return {
+        "rows": total,
+        "classified": classified,
+        "unclassified": other,
+        "coverage": round(classified / total, 4) if total else None,
+        "other_share": round(other / total, 4) if total else None,
+    }
+
+
+def unclassified_titles(frame: pd.DataFrame, limit: int = 50) -> list[str]:
+    """被归进「其他」的岗位标题（按出现次数降序），用于补关键词表。"""
+    if config.COL_MAJOR not in frame.columns or "job_title" not in frame.columns:
+        return []
+    mask = frame[config.COL_MAJOR].astype(str) == DEFAULT_MAJOR
+    titles = frame.loc[mask, "job_title"].astype(str).str.strip()
+    titles = titles[titles != ""]
+    counts = titles.value_counts().head(limit)
+    return [f"{title} × {int(count)}" for title, count in counts.items()]
+
+
+def salary_coverage(frame: pd.DataFrame) -> dict[str, Any]:
+    """薪资可解析覆盖率：中值非空的占比（「面议」与解析失败的岗位不计入）。"""
+    salary = pd.to_numeric(frame[config.COL_SALARY], errors="coerce") if config.COL_SALARY in frame.columns else pd.Series(dtype=float)
+    total = int(len(salary))
+    parsed = int(salary.notna().sum())
+    return {
+        "rows": total,
+        "parsed": parsed,
+        "missing": total - parsed,
+        "ratio": round(parsed / total, 4) if total else None,
+    }
+
+
+def write_dataset_meta(frame: pd.DataFrame, csv_path: str | Path, raw_path: str | Path) -> Path:
+    """把采集清单 + 覆盖率写到 CSV 旁边的 ``*.meta.json``。
+
+    报告要靠它说清三件事：这批数据抓了多少（配额完成率）、能解析多少（薪资覆盖率）、
+    方向归类到什么程度（覆盖率）。这些数字不属于数据本身，所以单独放旁边，
+    加载时由 loader 读进 ``DataSourceInfo.meta``。
+    """
+    csv_file = Path(csv_path)
+    meta_path = csv_file.with_suffix(".meta.json")
+
+    payload: dict[str, Any] = {
+        "source": "boss",
+        "dataset": csv_file.name,
+        "raw_file": str(raw_path),
+        "rows": int(len(frame)),
+        "unique_jobs": int(frame["job_id"].nunique()) if "job_id" in frame.columns else None,
+        "cities": int(frame[config.COL_CITY].nunique()) if config.COL_CITY in frame.columns else None,
+        "major_coverage": major_coverage(frame),
+        "salary_coverage": salary_coverage(frame),
+    }
+
+    manifest_path = Path(raw_path).with_suffix(".manifest.json")
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            manifest = {}
+        if isinstance(manifest, dict):
+            payload["manifest"] = {
+                key: manifest.get(key)
+                for key in (
+                    "queries", "cities", "pages_per_combo", "rounds_requested", "rounds_done",
+                    "quota", "quota_done", "quota_ratio", "exit_code", "cookie_source",
+                    "started_at", "finished_at", "stats", "totals",
+                )
+            }
+
+    meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return meta_path
+
+
 def build_dataset(raw_path: str | Path, out_path: str | Path, *, dedup: bool = True) -> pd.DataFrame:
-    """一步到位：原始 JSONL → 分析 CSV。返回写入的 DataFrame。"""
+    """一步到位：原始 JSONL → 分析 CSV（并在旁边写 *.meta.json 采集说明）。"""
     frame = build_frame(raw_path, dedup=dedup)
-    save_analysis_csv(frame, out_path)
+    path = save_analysis_csv(frame, out_path)
+    write_dataset_meta(frame, path, raw_path)
     return frame
 
 
@@ -543,7 +652,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     path = save_analysis_csv(frame, args.out)
+    meta_path = write_dataset_meta(frame, path, raw_path)
     print(f"[OK] 已生成分析数据集：{path}")
+    print(f"     采集与覆盖率说明：{meta_path.name}")
     print(f"     记录数：{len(frame)}｜列数：{frame.shape[1]}｜抓取时间：{datetime.now():%Y-%m-%d %H:%M}")
     print("     列（前 7 列是分析契约，其余是岗位侧扩展列）：")
     print("       " + "、".join(frame.columns))

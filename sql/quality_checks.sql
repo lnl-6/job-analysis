@@ -17,30 +17,30 @@ USE employment_analysis;
 
 SELECT 'ods_rows_vs_dwd_rows' AS check_name,
        '阻断' AS severity,
-       ABS((SELECT COUNT(*) FROM ods_employment_survey
+       ABS((SELECT COUNT(*) FROM ods_boss_jobs
              WHERE load_batch = (SELECT load_batch FROM v_latest_run))
-           - (SELECT COUNT(*) FROM dwd_survey_clean
+           - (SELECT COUNT(*) FROM dwd_boss_jobs
              WHERE load_batch = (SELECT load_batch FROM v_latest_run))
            - (SELECT rows_invalid_salary + rows_outlier_removed FROM v_latest_run)) AS violations,
        '最新一次装载：ODS 行数 = DWD 行数 + 本次记录的剔除行数（无效薪资 / IQR 异常值）' AS detail
 
 UNION ALL
 SELECT 'dwd_non_positive_salary', '阻断',
-       (SELECT COUNT(*) FROM dwd_survey_clean
+       (SELECT COUNT(*) FROM dwd_boss_jobs
          WHERE expected_salary <= 0
            AND load_batch = (SELECT load_batch FROM v_latest_run)),
        '期望薪资必须 > 0（清洗阶段就该剔除；schema 的 CHECK 约束是第二道防线）'
 
 UNION ALL
 SELECT 'dwd_satisfaction_out_of_range', '阻断',
-       (SELECT COUNT(*) FROM dwd_survey_clean
+       (SELECT COUNT(*) FROM dwd_boss_jobs
          WHERE (satisfaction < 0 OR satisfaction > 5)
            AND load_batch = (SELECT load_batch FROM v_latest_run)),
        '满意度评分必须在 0~5 之间'
 
 UNION ALL
 SELECT 'dwd_unspecified_city_leaked', '阻断',
-       (SELECT COUNT(*) FROM dwd_survey_clean f
+       (SELECT COUNT(*) FROM dwd_boss_jobs f
           JOIN dim_city c ON c.city_key = f.city_key
          WHERE c.city IN ('', '无', '未填', '不限', '-', '/')
            AND f.load_batch = (SELECT load_batch FROM v_latest_run)),
@@ -48,7 +48,7 @@ SELECT 'dwd_unspecified_city_leaked', '阻断',
 
 UNION ALL
 SELECT 'dwd_missing_dimension_key', '阻断',
-       (SELECT COUNT(*) FROM dwd_survey_clean f
+       (SELECT COUNT(*) FROM dwd_boss_jobs f
          WHERE (f.major_key IS NULL OR f.education_key IS NULL
                 OR f.direction_key IS NULL OR f.city_key IS NULL)
            AND f.load_batch = (SELECT load_batch FROM v_latest_run)),
@@ -95,22 +95,22 @@ SELECT 'ads_significant_requires_sufficient', '阻断',
 
 UNION ALL
 SELECT 'ods_missing_gender_over_10pct', '提示',
-       CASE WHEN (SELECT COUNT(*) FROM ods_employment_survey
+       CASE WHEN (SELECT COUNT(*) FROM ods_boss_jobs
                    WHERE (gender IS NULL OR gender = '')
                      AND load_batch = (SELECT load_batch FROM v_latest_run)) * 100.0
-                 / NULLIF((SELECT COUNT(*) FROM ods_employment_survey
+                 / NULLIF((SELECT COUNT(*) FROM ods_boss_jobs
                             WHERE load_batch = (SELECT load_batch FROM v_latest_run)), 0) > 10
             THEN 1 ELSE 0 END,
        '最新一次装载里性别缺失率超过 10% 时提示（缺失过多会让该维度不可用）'
 
 UNION ALL
-SELECT 'ods_duplicate_respondent_id', '提示',
-       (SELECT COUNT(*) FROM ods_employment_survey
+SELECT 'ods_duplicate_job_ref', '提示',
+       (SELECT COUNT(*) FROM ods_boss_jobs
          WHERE load_batch = (SELECT load_batch FROM v_latest_run)
-           AND respondent_id IS NOT NULL)
-       - (SELECT COUNT(DISTINCT respondent_id) FROM ods_employment_survey
+           AND job_ref IS NOT NULL)
+       - (SELECT COUNT(DISTINCT job_ref) FROM ods_boss_jobs
            WHERE load_batch = (SELECT load_batch FROM v_latest_run)),
-       '最新一次装载里问卷编号重复数量（真实问卷数据常见，仅提示；没有编号列时计 0）'
+       '最新一次装载里岗位编号重复数量（真实抓取数据常见，仅提示；没有编号列时计 0）'
 
 UNION ALL
 SELECT 'job_positive_salary', '阻断',

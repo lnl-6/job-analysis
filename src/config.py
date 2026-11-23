@@ -94,6 +94,21 @@ MIN_RECOMMEND_SAMPLES = 5   # 城市参与推荐排序所需的最小样本量
 CI_LEVEL = 0.95             # 置信水平
 ALPHA = 0.05                # 显著性水平（判定「差异显著」的阈值）
 
+# ---------------- 口径与覆盖率 ----------------
+# 方向归类覆盖率低于此值时，报告要显式提示「关键词表跟不上岗位命名」
+MAJOR_COVERAGE_WARN = 0.85
+
+# 本列在岗位口径下是吸引力代理分（见 docs/metrics.md 第 8 节）；不是受访者满意度。
+# 列名沿用了分析契约的历史叫法，改列名会破坏 7 列契约，所以只在展示层换措辞。
+# 表头与结论都要跟着数据源换词，否则就是同一个数字起两个名字。
+SATISFACTION_PROXY_TERM = "平均吸引力代理分（proxy）"
+DEFAULT_SATISFACTION_TERM = "平均满意度"
+
+
+def satisfaction_term_for(filename: str) -> str:
+    """按数据源返回「满意度」列的中文口径名（岗位数据 → 吸引力代理分）。"""
+    return SATISFACTION_PROXY_TERM if "boss" in str(filename).lower() else DEFAULT_SATISFACTION_TERM
+
 
 def ensure_output_dir() -> Path:
     """确保输出目录存在。"""

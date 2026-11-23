@@ -46,7 +46,8 @@
 
 ```bash
 python scripts/export_published_summary.py
-# 默认读取 data/raw/boss_岗位数据集.csv（缺失时回退到演示数据），输出到本目录
+# 默认读取 data/raw/boss_岗位数据集.csv（缺失时明确报错，不回退到任何演示数据），输出到本目录
+# 原始数据由 scripts/crawl_boss.py 现场采集，不入库。
 ```
 
 口径细节见 [`docs/metrics.md`](../../docs/metrics.md)，数据源说明见

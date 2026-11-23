@@ -35,13 +35,13 @@ SAMPLE_PATH = write_records(Path(_SAMPLE_TMP.name) / "fixture_jobs.jsonl")
 QUERY_CASES = ("02_salary_percentiles_cross_check", "03_pareto_distribution")
 
 TABLE_NAMES = (
-    "ods_employment_survey",
+    "ods_boss_jobs",
     "dim_major",
     "dim_city",
     "dim_education",
     "dim_direction",
     "dim_industry",
-    "dwd_survey_clean",
+    "dwd_boss_jobs",
     "ads_run_meta",
     "ads_group_stats",
     "ads_major_city_matrix",
@@ -96,7 +96,7 @@ class _Fixture:
 
     def __init__(self, rows: int = 120, seed: int = 7) -> None:
         self.temp = tempfile.TemporaryDirectory()
-        self.path = Path(self.temp.name) / "demo_sql_layer.csv"
+        self.path = Path(self.temp.name) / "boss_sql_layer.csv"
         self.frame = _fixture_frame(rows, seed)
         self.frame.to_csv(self.path, index=False, encoding="utf-8-sig")
 
@@ -242,8 +242,8 @@ def test_load_run_writes_every_layer() -> None:
         assert not outcome.blocked, "\n".join(outcome.summary_lines())
 
         counts = _table_counts(conn)
-        assert counts["ods_employment_survey"] == len(fixture.frame)
-        assert counts["dwd_survey_clean"] == len(fixture.clean)
+        assert counts["ods_boss_jobs"] == len(fixture.frame)
+        assert counts["dwd_boss_jobs"] == len(fixture.clean)
         assert counts["ads_run_meta"] == 1
         assert counts["ads_group_stats"] > 0
         assert counts["ads_major_city_matrix"] > 0
@@ -290,7 +290,7 @@ def test_city_placeholder_becomes_unknown_member() -> None:
         assert "无" not in cities, "「无」不是一个城市，不允许进维表"
 
         orphan = db.query(
-            "SELECT COUNT(*) AS n FROM dwd_survey_clean f "
+            "SELECT COUNT(*) AS n FROM dwd_boss_jobs f "
             "LEFT JOIN dim_city c ON c.city_key = f.city_key "
             "WHERE c.city_key IS NULL",
             connection=conn,
@@ -310,8 +310,8 @@ def test_checks_block_bad_rows() -> None:
         rejected = False
         try:
             conn.execute(
-                "UPDATE dwd_survey_clean SET expected_salary = -1 "
-                "WHERE respondent_uid = (SELECT MIN(respondent_uid) FROM dwd_survey_clean)"
+                "UPDATE dwd_boss_jobs SET expected_salary = -1 "
+                "WHERE job_row_id = (SELECT MIN(job_row_id) FROM dwd_boss_jobs)"
             )
             conn.commit()
         except Exception:  # noqa: BLE001 - 不同后端的异常类型不同，只看是否被拒绝
@@ -393,14 +393,14 @@ def test_rebootstrap_after_load_is_safe() -> None:
     try:
         conn, _outcome = fixture.loaded()
         before = _table_counts(conn)
-        assert before["dwd_survey_clean"] > 0, "前置条件：库里得有数据"
+        assert before["dwd_boss_jobs"] > 0, "前置条件：库里得有数据"
 
         db.ensure_schema(conn)
 
         after = _table_counts(conn)
-        assert after["dwd_survey_clean"] == 0, "重新引导后事实表应为空"
+        assert after["dwd_boss_jobs"] == 0, "重新引导后事实表应为空"
         assert after["dim_city"] == 0, "重新引导后维表应为空"
-        assert after["ods_employment_survey"] == 0, "重新引导后 ODS 应为空"
+        assert after["ods_boss_jobs"] == 0, "重新引导后 ODS 应为空"
 
         # 重建之后必须还能照常装载（第二次装载与新库一样顺）
         outcome = db.load_run(
@@ -413,7 +413,7 @@ def test_rebootstrap_after_load_is_safe() -> None:
             bootstrap=False,
         )
         assert not outcome.blocked, "\n".join(outcome.summary_lines())
-        assert _table_counts(conn)["dwd_survey_clean"] == len(fixture.clean)
+        assert _table_counts(conn)["dwd_boss_jobs"] == len(fixture.clean)
     finally:
         fixture.close()
 

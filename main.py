@@ -158,7 +158,10 @@ def main() -> int:
         print("[4/5] 已跳过图表生成")
 
     # 5) 报告
-    conclusions = report.build_conclusions(results)
+    conclusions = report.build_conclusions(
+        results,
+        satisfaction_term=config.satisfaction_term_for(info.path.name),
+    )
     report.print_console_report(info, cleaning_report, results, conclusions, charts)
     md_path = report.write_markdown_report(info, cleaning_report, results, conclusions, charts)
     print(f"[5/5] 报告已生成：{md_path}")

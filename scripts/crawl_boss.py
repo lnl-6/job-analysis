@@ -442,6 +442,21 @@ def _normalize_cookie(text: str) -> str:
     return text
 
 
+def count_totals(path: Path) -> dict[str, int]:
+    """以落盘文件为准统计 记录数 / 唯一岗位数 / 页面数，并校验两个口径不打架。
+
+    旧版把内存里的两个计数器分开累加，出现过「唯一岗位数 > 记录数」的矛盾，
+    所以这里统一从文件重算，并 assert 关系成立。
+    """
+    pages, ids, records = load_cache(path)
+    total_records = len(records)
+    total_unique = len(ids)
+    assert total_unique <= total_records, (
+        f"唯一岗位数（{total_unique}）不应大于记录数（{total_records}）：计数口径不一致"
+    )
+    return {"records": total_records, "unique_jobs": total_unique, "pages": len(pages)}
+
+
 def crawl(args: argparse.Namespace) -> int:
     out_path = Path(args.out)
     manifest_path = Path(args.manifest) if args.manifest else out_path.with_suffix(".manifest.json")
@@ -450,6 +465,12 @@ def crawl(args: argparse.Namespace) -> int:
     cookies_from_arg = (args.cookie or "").strip()
     stats = _blank_stats()
     started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    queries_list = [item.strip() for item in args.query.split(",") if item.strip()]
+    cities_list = [item.strip() for item in args.city.split(",") if item.strip()]
+    # 目标配额：关键词 × 城市 × 每城市页数 × 轮次。完成率写进清单，报告里要报出来
+    # ——「抓了多少」必须相对「打算抓多少」才有意义。
+    quota = len(queries_list) * len(cities_list) * max(1, args.pages) * max(1, args.rounds)
 
     def report(*, rounds_done: int, exit_code: int, note: str = "") -> int:
         """写采集清单并返回退出码（清单是报告溯源与复现的依据）。"""
@@ -460,13 +481,25 @@ def crawl(args: argparse.Namespace) -> int:
             cookie_source = "env:BOSS_COOKIE"
         elif args.cookie_file:
             cookie_source = f"file:{args.cookie_file}"
+
+        # 计数同源：以落盘文件为准重新统计，而不是累加内存里的计数器。
+        # （旧版 records / unique_jobs 取两个不同来源，曾出现「唯一数 > 记录数」的矛盾。）
+        pages_on_disk, ids_on_disk, records_on_disk = load_cache(out_path)
+        total_records = len(records_on_disk)
+        total_unique = len(ids_on_disk)
+        assert total_unique <= total_records, (
+            f"唯一岗位数（{total_unique}）不应大于记录数（{total_records}）：计数口径不一致"
+        )
+        quota_done = len(pages_on_disk)
+        quota_ratio = round(quota_done / quota, 4) if quota else None
+
         _write_manifest(
             manifest_path,
             {
                 "source": "boss",
                 "raw_file": str(out_path),
-                "queries": [item.strip() for item in args.query.split(",") if item.strip()],
-                "cities": [item.strip() for item in args.city.split(",") if item.strip()],
+                "queries": queries_list,
+                "cities": cities_list,
                 "pages_per_combo": args.pages,
                 "page_size": args.page_size,
                 "rounds_requested": args.rounds,
@@ -479,15 +512,23 @@ def crawl(args: argparse.Namespace) -> int:
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "exit_code": exit_code,
                 "note": note,
+                "quota": quota,
+                "quota_done": quota_done,
+                "quota_ratio": quota_ratio,
                 "stats": dict(stats),
                 "totals": {
-                    "records": len(records),
-                    "unique_jobs": len(seen_ids),
-                    "pages": len(pages_done),
+                    "records": total_records,
+                    "unique_jobs": total_unique,
+                    "pages": len(pages_on_disk),
                 },
             },
         )
         print(f"[清单] 采集统计已写入 {manifest_path}")
+        if quota:
+            print(
+                f"[清单] 配额完成率 {quota_done}/{quota} = {quota_ratio:.1%}"
+                f"（关键词 {len(queries_list)} × 城市 {len(cities_list)} × 页 {args.pages} × 轮 {args.rounds}）"
+            )
         return exit_code
 
     if args.offline:

@@ -11,7 +11,7 @@ WITH city_stats AS (
          c.city,
          COUNT(*)                          AS sample_size,
          ROUND(AVG(f.expected_salary), 2)  AS mean_salary
-  FROM dwd_survey_clean f
+  FROM dwd_boss_jobs f
   JOIN dim_major m ON m.major_key = f.major_key
   JOIN dim_city  c ON c.city_key  = f.city_key
   GROUP BY m.major, c.city

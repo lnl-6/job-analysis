@@ -62,7 +62,7 @@ UNKNOWN_DIM_VALUE = "未指定"
 
 # ODS 层列映射：目标列 → 源数据列（源文件缺某列时写 NULL，并在返回值里说明）
 ODS_COLUMN_MAP = {
-    "respondent_id": config.COL_ID,
+    "job_ref": config.COL_ID,
     "gender": config.COL_GENDER,
     "major": config.COL_MAJOR,
     "education": config.COL_EDU,
@@ -430,7 +430,7 @@ def _dimension_values(
 # 装载：ODS / DWD
 # =============================================================================
 def _load_ods(conn: Any, raw: pd.DataFrame, load_batch: str) -> int:
-    _delete(conn, "ods_employment_survey", f"load_batch = {_ph(conn, 1)}", (load_batch,))
+    _delete(conn, "ods_boss_jobs", f"load_batch = {_ph(conn, 1)}", (load_batch,))
 
     available = [column for column in ODS_COLUMN_MAP.values() if column in raw.columns]
     rows: list[tuple[Any, ...]] = []
@@ -440,7 +440,7 @@ def _load_ods(conn: Any, raw: pd.DataFrame, load_batch: str) -> int:
             values.append(_text_or_none(row[source]) if source in available else None)
         rows.append(tuple(values))
 
-    conn.executemany(_insert_sql(conn, "ods_employment_survey", ODS_COLUMNS), rows)
+    conn.executemany(_insert_sql(conn, "ods_boss_jobs", ODS_COLUMNS), rows)
     return len(rows)
 
 
@@ -493,7 +493,7 @@ def _load_dwd(
     """写入事实表。source_row_no 用清洗后数据保留的原始行号（行被剔除也能对齐）。"""
     _delete(
         conn,
-        "dwd_survey_clean",
+        "dwd_boss_jobs",
         f"load_batch = {_ph(conn, 1)}",
         (load_batch,),
     )
@@ -501,7 +501,7 @@ def _load_dwd(
     frame = pd.DataFrame(index=clean.index)
     frame["load_batch"] = load_batch
     frame["source_row_no"] = [int(label) + 1 for label in clean.index]
-    frame["respondent_id"] = (
+    frame["job_ref"] = (
         raw[config.COL_ID] if config.COL_ID in raw.columns else pd.Series(index=raw.index, dtype=object)
     )
     frame["gender"] = clean[config.COL_GENDER].astype(str) if config.COL_GENDER in clean.columns else None
@@ -531,7 +531,7 @@ def _load_dwd(
     columns = [
         "load_batch",
         "source_row_no",
-        "respondent_id",
+        "job_ref",
         "gender",
         "major_key",
         "education_key",
@@ -546,7 +546,7 @@ def _load_dwd(
     ]
     frame = frame.reindex(columns=columns)
     rows = [tuple(None if pd.isna(v) else v for v in record) for record in frame.itertuples(index=False)]
-    conn.executemany(_insert_sql(conn, "dwd_survey_clean", columns), rows)
+    conn.executemany(_insert_sql(conn, "dwd_boss_jobs", columns), rows)
     return len(rows)
 
 
@@ -1107,13 +1107,13 @@ def load_run(
                 f"原始文件读出 {len(raw_text)} 行，而分析入参是 {len(raw)} 行："
                 "行号无法对齐，装载中止。"
             )
-        written["ods_employment_survey"] = _load_ods(conn, raw_text, load_batch=fingerprint)
+        written["ods_boss_jobs"] = _load_ods(conn, raw_text, load_batch=fingerprint)
 
         written.update(_load_dimensions(conn, clean))
         conn.commit()  # 维表先落库，下面的代理键查询才看得到
 
         key_map = _dimension_key_map(conn)
-        written["dwd_survey_clean"] = _load_dwd(conn, raw, clean, fingerprint, key_map)
+        written["dwd_boss_jobs"] = _load_dwd(conn, raw, clean, fingerprint, key_map)
         if has_job_layer(clean):
             written.update(_load_job_layer(conn, clean, key_map, run_id, fingerprint))
         written["ads_run_meta"] = _load_run_meta(

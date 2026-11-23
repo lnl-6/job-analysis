@@ -34,7 +34,7 @@ DROP TABLE IF EXISTS ads_comparisons;
 DROP TABLE IF EXISTS ads_major_city_matrix;
 DROP TABLE IF EXISTS ads_group_stats;
 DROP TABLE IF EXISTS ads_run_meta;
-DROP TABLE IF EXISTS dwd_survey_clean;
+DROP TABLE IF EXISTS dwd_boss_jobs;
 -- 岗位市场层（sql/schema_job_sqlite.sql 建的支路）：它引用 dim_city / dim_industry，
 -- 所以必须先于维表清场，否则重跑引导时会被外键挡住（FOREIGN KEY constraint failed）。
 DROP VIEW  IF EXISTS v_job_market_overview;
@@ -53,14 +53,14 @@ DROP TABLE IF EXISTS dim_direction;
 DROP TABLE IF EXISTS dim_education;
 DROP TABLE IF EXISTS dim_city;
 DROP TABLE IF EXISTS dim_major;
-DROP TABLE IF EXISTS ods_employment_survey;
+DROP TABLE IF EXISTS ods_boss_jobs;
 
 -- 下面每张表建表前还会各写一次 DROP IF EXISTS（此处已被清掉，属幂等空操作）。
-DROP TABLE IF EXISTS ods_employment_survey;
-CREATE TABLE ods_employment_survey (
+DROP TABLE IF EXISTS ods_boss_jobs;
+CREATE TABLE ods_boss_jobs (
   load_batch       TEXT    NOT NULL,   -- 装载批次（数据文件 SHA-256 前 12 位）
   source_row_no    INTEGER NOT NULL,   -- 数据行号（CSV 第 2 行记为 1）
-  respondent_id    TEXT    NULL,       -- 问卷编号（原始 ID 列）
+  job_ref    TEXT    NULL,       -- 岗位编号（原始 ID 列）
   gender           TEXT    NULL,       -- 性别（原始字符串，缺失保持 NULL）
   major            TEXT    NULL,       -- 专业
   education        TEXT    NULL,       -- 学历
@@ -73,7 +73,7 @@ CREATE TABLE ods_employment_survey (
   loaded_at        TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- 入库时间
   PRIMARY KEY (load_batch, source_row_no)
 );
-CREATE INDEX idx_ods_major_city ON ods_employment_survey (major, city);
+CREATE INDEX idx_ods_major_city ON ods_boss_jobs (major, city);
 
 -- -----------------------------------------------------------------------------
 -- DWD：维度表
@@ -110,14 +110,14 @@ CREATE TABLE dim_industry (
 );
 
 -- -----------------------------------------------------------------------------
--- DWD：事实表（粒度 = 一份问卷）
+-- DWD：事实表（粒度 = 一条岗位）
 -- -----------------------------------------------------------------------------
-DROP TABLE IF EXISTS dwd_survey_clean;
-CREATE TABLE dwd_survey_clean (
-  respondent_uid        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  -- 代理键
+DROP TABLE IF EXISTS dwd_boss_jobs;
+CREATE TABLE dwd_boss_jobs (
+  job_row_id        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,  -- 代理键
   load_batch            TEXT    NOT NULL,   -- 装载批次
   source_row_no         INTEGER NOT NULL,   -- 来源行号（与 ODS 对齐，幂等键的一半）
-  respondent_id         TEXT    NULL,       -- 问卷编号
+  job_ref         TEXT    NULL,       -- 岗位编号
   gender                TEXT    NULL,       -- 性别（缺失已按众数填充）
   major_key             INTEGER NOT NULL REFERENCES dim_major (major_key),
   education_key         INTEGER NOT NULL REFERENCES dim_education (education_key),
@@ -132,11 +132,11 @@ CREATE TABLE dwd_survey_clean (
   loaded_at             TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (load_batch, source_row_no)
 );
-CREATE INDEX idx_dwd_major     ON dwd_survey_clean (major_key);
-CREATE INDEX idx_dwd_city      ON dwd_survey_clean (city_key);
-CREATE INDEX idx_dwd_education ON dwd_survey_clean (education_key);
-CREATE INDEX idx_dwd_direction ON dwd_survey_clean (direction_key);
-CREATE INDEX idx_dwd_salary    ON dwd_survey_clean (expected_salary);
+CREATE INDEX idx_dwd_major     ON dwd_boss_jobs (major_key);
+CREATE INDEX idx_dwd_city      ON dwd_boss_jobs (city_key);
+CREATE INDEX idx_dwd_education ON dwd_boss_jobs (education_key);
+CREATE INDEX idx_dwd_direction ON dwd_boss_jobs (direction_key);
+CREATE INDEX idx_dwd_salary    ON dwd_boss_jobs (expected_salary);
 
 -- -----------------------------------------------------------------------------
 -- ADS：分析结果层（统计量只算一次，报告与 BI 都从这里取数）

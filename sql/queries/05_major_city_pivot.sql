@@ -15,7 +15,7 @@ SELECT m.major,
        SUM(CASE WHEN c.city = '武汉' THEN 1 ELSE 0 END)                 AS "武汉",
        SUM(CASE WHEN c.city = '南京' THEN 1 ELSE 0 END)                 AS "南京",
        ROUND(AVG(f.expected_salary), 2)                                AS mean_salary
-FROM dwd_survey_clean f
+FROM dwd_boss_jobs f
 JOIN dim_major m ON m.major_key = f.major_key
 JOIN dim_city  c ON c.city_key  = f.city_key
 GROUP BY m.major

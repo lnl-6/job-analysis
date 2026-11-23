@@ -464,6 +464,111 @@ def test_comparisons_have_stable_keys() -> None:
         assert item.verdict, "判定文案不能为空（样本不足也要写明样本不足）"
 
 
+# ---------------------------------------------------------------------------
+# 报告可信度：覆盖率 / 口径命名 / 样本缺口 / 混杂分层 / 清单计数
+# ---------------------------------------------------------------------------
+def test_manifest_totals_consistent() -> None:
+    """采集清单的计数必须同源：唯一岗位数不能大于记录数（重复 job_id 时两者不等）。"""
+    import json
+
+    from scripts import crawl_boss
+
+    with tempfile.TemporaryDirectory() as tmp:
+        raw = Path(tmp) / "raw.jsonl"
+        record = {
+            "job": {"encryptJobId": "job-dup"},
+            "city_code": "101010100",
+            "query": "数据分析",
+            "page": 1,
+        }
+        line = json.dumps(record, ensure_ascii=False)
+        raw.write_text(line + "\n" + line + "\n", encoding="utf-8")
+
+        totals = crawl_boss.count_totals(raw)
+        assert totals["records"] == 2
+        assert totals["unique_jobs"] == 1
+        assert totals["unique_jobs"] <= totals["records"]
+
+
+def test_major_coverage_and_gap_titles() -> None:
+    """方向归类覆盖率与「其他」标题都要能现算出来（补关键词表的依据）。"""
+    from src.sources import boss
+
+    frame = pd.DataFrame(
+        {
+            config.COL_MAJOR: ["数据分析", "数据分析", "其他", "数据开发", "其他"],
+            "job_title": ["数据分析师", "数据运营", "神秘岗位A", "ETL 工程师", "神秘岗位B"],
+        }
+    )
+    coverage = boss.major_coverage(frame)
+    assert coverage["rows"] == 5
+    assert coverage["classified"] == 3
+    assert coverage["unclassified"] == 2
+    assert abs(float(coverage["coverage"]) - 0.6) < 1e-9
+
+    titles = boss.unclassified_titles(frame, limit=5)
+    assert len(titles) == 2
+    assert any("神秘岗位A" in item for item in titles)
+
+
+def test_satisfaction_term_switches_by_source() -> None:
+    """岗位数据里的「满意度」必须改叫吸引力代理分，不能继续叫满意度。"""
+    assert config.satisfaction_term_for("boss_岗位数据集.csv") == config.SATISFACTION_PROXY_TERM
+    assert "代理分" in config.SATISFACTION_PROXY_TERM
+
+
+def test_sample_gap_frame_computes_missing_rows() -> None:
+    """样本缺口表：按维度算出「还差多少条」，数字由数据算、不手写。"""
+    results = {
+        "group_stats": pd.DataFrame(
+            {
+                "dimension": ["学历", "学历", "城市"],
+                "group_value": ["本科", "博士", "北京"],
+                "sample_size": [100, 5, 29],
+            }
+        )
+    }
+    gaps = report._sample_gap_frame(results)
+    by_dim = {str(row["维度"]): row for _, row in gaps.iterrows()}
+    assert by_dim["学历"]["组数"] == 2
+    assert by_dim["学历"]["达标组数"] == 1
+    assert by_dim["学历"]["缺口条数"] == config.MIN_GROUP_SIZE - 5
+    assert by_dim["城市"]["缺口条数"] == 1
+
+
+def test_intern_by_job_type_layered() -> None:
+    """混杂分层表：岗位类型 × 是否实习，均值由数据算出。"""
+    frame = pd.DataFrame(
+        {
+            config.COL_SALARY: [5000, 6000, 9000, 10000],
+            config.COL_INTERN: ["是", "是", "否", "否"],
+            "job_type": ["实习", "实习", "社招", "社招"],
+        }
+    )
+    table = analysis.intern_by_job_type(frame)
+    assert {"岗位类型", "是否实习", "平均期望薪资", "人数"} <= set(table.columns)
+    assert len(table) == 2
+    fulltime_mean = float(table.loc[table["岗位类型"] == "社招", "平均期望薪资"].iloc[0])
+    assert fulltime_mean == 9500.0
+
+
+def test_nearest_rank_vs_linear_quantile_close() -> None:
+    """SQL 用 nearest-rank、Python 用线性插值：同一列的分位数差异应 < 0.5%。
+
+    SQL 侧由 CI 的 MySQL job 执行 sql/queries/02_salary_percentiles_cross_check.sql 实跑对照；
+    这里守住另一头：两套定义在连续分布上不会给出互相矛盾的数字。
+    """
+    import numpy as np
+
+    series = pd.Series(np.linspace(3000.0, 20000.0, 500))
+    ordered = series.sort_values().to_numpy()
+    for level in (0.25, 0.5, 0.75):
+        rank = int(np.ceil(len(ordered) * level))
+        nearest = float(ordered[max(rank - 1, 0)])
+        linear = float(series.quantile(level))
+        assert abs(nearest - linear) / linear < 0.005
+
+
 def main() -> int:
     print("=" * 50)
     print("运行测试")
@@ -496,6 +601,12 @@ def main() -> int:
         test_readme_keeps_no_run_specific_numbers,
         test_group_stats_table_shape,
         test_comparisons_have_stable_keys,
+        test_manifest_totals_consistent,
+        test_major_coverage_and_gap_titles,
+        test_satisfaction_term_switches_by_source,
+        test_sample_gap_frame_computes_missing_rows,
+        test_intern_by_job_type_layered,
+        test_nearest_rank_vs_linear_quantile_close,
     ]
 
     failed = 0

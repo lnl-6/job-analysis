@@ -8,8 +8,8 @@
 
 | 层 | 表 | 粒度（一行代表什么） | 写入者 | 用途 |
 | --- | --- | --- | --- | --- |
-| ODS | `ods_employment_survey` | 一份问卷 | `src/db.py::_load_ods` | 原始落地：**全部按字符串存**，不做类型推断、不改一个字符 |
-| DWD | `dwd_survey_clean` + 5 张维表 | 一份**清洗后**的问卷 | `_load_dwd` / `_load_dimensions` | 分析用的明细事实表，带外键与约束 |
+| ODS | `ods_boss_jobs` | 一条岗位 | `src/db.py::_load_ods` | 原始落地：**全部按字符串存**，不做类型推断、不改一个字符 |
+| DWD | `dwd_boss_jobs` + 5 张维表 | 一条**清洗后**的岗位 | `_load_dwd` / `_load_dimensions` | 分析用的明细事实表，带外键与约束 |
 | ADS | `ads_*`（7 张） | 一次运行的**结果** | `_load_run_meta` 等 | 给 SQL 查询、看板与 BI 直接消费的成品数据 |
 
 关键约定：
@@ -25,13 +25,13 @@
 
 ## 一、ODS 层
 
-### `ods_employment_survey` — 原始问卷（主键：`load_batch` + `source_row_no`）
+### `ods_boss_jobs` — 原始岗位（主键：`load_batch` + `source_row_no`）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `load_batch` | VARCHAR(32) | 装载批次 = 数据文件 SHA-256 前 12 位（同一份文件重复装载是同一批，先删后插） |
 | `source_row_no` | INT | 数据行号，CSV 第 2 行记为 1（与 Python 侧 DataFrame 的 index 对齐） |
-| `respondent_id` | VARCHAR(32) | 问卷编号（原始 `ID` 列） |
+| `job_ref` | VARCHAR(32) | 岗位编号（原始 `ID` 列） |
 | `gender` | VARCHAR(16) | 性别（原始字符串；本项目**不做性别维度分析**，仅入库备查） |
 | `major` | VARCHAR(64) | 专业 |
 | `education` | VARCHAR(16) | 学历 |
@@ -57,14 +57,14 @@
 | `dim_direction` | `direction_key`（PK, 自增）、`direction`（UNIQUE） | 毕业去向 |
 | `dim_industry` | `industry_key`（PK, 自增）、`industry`（UNIQUE） | 就业行业（该维度允许为空，占位值不建成员） |
 
-### `dwd_survey_clean` — 清洗后明细（主键：`respondent_uid`；唯一键：`load_batch` + `source_row_no`）
+### `dwd_boss_jobs` — 清洗后明细（主键：`job_row_id`；唯一键：`load_batch` + `source_row_no`）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `respondent_uid` | BIGINT | 代理键（自增） |
+| `job_row_id` | BIGINT | 代理键（自增） |
 | `load_batch` | VARCHAR(32) | 装载批次（数据指纹前 12 位） |
 | `source_row_no` | INT | 来源行号（与 ODS 对齐，幂等键的一半） |
-| `respondent_id` | VARCHAR(32) | 问卷编号 |
+| `job_ref` | VARCHAR(32) | 岗位编号 |
 | `gender` | VARCHAR(8) | 性别（缺失已按众数填充） |
 | `major_key` / `education_key` / `direction_key` / `city_key` | INT | 外键（`city_key` 等**非空**） |
 | `industry_key` | INT | 外键（可空） |

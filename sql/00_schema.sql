@@ -3,7 +3,7 @@
 -- =============================================================================
 -- 分层约定
 --   ODS（原始落地）  ：原样追加，不做任何清洗，保留原始字符串
---   DWD（清洗明细）  ：Python 清洗后的明细，粒度 = 一份问卷，星型模型的事实表
+--   DWD（清洗明细）  ：Python 清洗后的明细，粒度 = 一条岗位，星型模型的事实表
 --   ADS（分析结果）  ：由 Python 统计层算好后写入的结果表（报告里每一块数字的来源）
 --
 -- 命名约定
@@ -41,7 +41,7 @@ DROP TABLE IF EXISTS ads_comparisons;
 DROP TABLE IF EXISTS ads_major_city_matrix;
 DROP TABLE IF EXISTS ads_group_stats;
 DROP TABLE IF EXISTS ads_run_meta;
-DROP TABLE IF EXISTS dwd_survey_clean;
+DROP TABLE IF EXISTS dwd_boss_jobs;
 -- 岗位市场层（sql/02_job_market.sql 建的支路）：它引用 dim_city / dim_industry，
 -- 所以必须先于维表清场，否则重跑引导时会被外键挡住（errno 3730 / FOREIGN KEY failed）。
 DROP VIEW IF EXISTS v_job_market_overview;
@@ -60,14 +60,14 @@ DROP TABLE IF EXISTS dim_direction;
 DROP TABLE IF EXISTS dim_education;
 DROP TABLE IF EXISTS dim_city;
 DROP TABLE IF EXISTS dim_major;
-DROP TABLE IF EXISTS ods_employment_survey;
+DROP TABLE IF EXISTS ods_boss_jobs;
 
 -- 下面每张表建表前还会各写一次 DROP IF EXISTS（此处已被清掉，属幂等空操作）。
-DROP TABLE IF EXISTS ods_employment_survey;
-CREATE TABLE ods_employment_survey (
+DROP TABLE IF EXISTS ods_boss_jobs;
+CREATE TABLE ods_boss_jobs (
   load_batch       VARCHAR(32)  NOT NULL COMMENT '装载批次（数据文件 SHA-256 前 12 位）',
   source_row_no    INT          NOT NULL COMMENT '数据行号（CSV 第 2 行记为 1）',
-  respondent_id    VARCHAR(32)  NULL     COMMENT '问卷编号（原始 ID 列）',
+  job_ref    VARCHAR(32)  NULL     COMMENT '岗位编号（原始 ID 列）',
   gender           VARCHAR(16)  NULL     COMMENT '性别（原始字符串，缺失保持 NULL）',
   major            VARCHAR(64)  NULL     COMMENT '专业',
   education        VARCHAR(16)  NULL     COMMENT '学历',
@@ -81,7 +81,7 @@ CREATE TABLE ods_employment_survey (
   PRIMARY KEY (load_batch, source_row_no),
   KEY idx_ods_major_city (major, city)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  COMMENT='ODS：就业调查问卷原始落地（只追加，不修改）';
+  COMMENT='ODS：Boss 岗位原始落地（只追加，不修改）';
 
 -- =============================================================================
 -- DWD：维度表（星型模型的维）
@@ -128,14 +128,14 @@ CREATE TABLE dim_industry (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='维表：就业行业';
 
 -- =============================================================================
--- DWD：事实表（粒度 = 一份问卷）
+-- DWD：事实表（粒度 = 一条岗位）
 -- =============================================================================
-DROP TABLE IF EXISTS dwd_survey_clean;
-CREATE TABLE dwd_survey_clean (
-  respondent_uid       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '代理键',
+DROP TABLE IF EXISTS dwd_boss_jobs;
+CREATE TABLE dwd_boss_jobs (
+  job_row_id       BIGINT        NOT NULL AUTO_INCREMENT COMMENT '代理键',
   load_batch           VARCHAR(32)   NOT NULL COMMENT '装载批次（数据文件 SHA-256 前 12 位）',
   source_row_no        INT           NOT NULL COMMENT '来源行号（与 ODS 对齐，幂等键的一半）',
-  respondent_id        VARCHAR(32)   NULL     COMMENT '问卷编号',
+  job_ref        VARCHAR(32)   NULL     COMMENT '岗位编号',
   gender               VARCHAR(8)    NULL     COMMENT '性别（缺失已按众数填充）',
   major_key            INT           NOT NULL COMMENT '→ dim_major.major_key',
   education_key        INT           NOT NULL COMMENT '→ dim_education.education_key',
@@ -148,7 +148,7 @@ CREATE TABLE dwd_survey_clean (
   salary_is_filled     TINYINT(1)    NOT NULL COMMENT '期望薪资是否为填充值：1=填充 0=原始',
   satisfaction_is_filled TINYINT(1)  NOT NULL COMMENT '满意度是否为填充值：1=填充 0=原始',
   loaded_at            DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '入库时间',
-  PRIMARY KEY (respondent_uid),
+  PRIMARY KEY (job_row_id),
   UNIQUE KEY uk_dwd_batch_row (load_batch, source_row_no),
   KEY idx_dwd_major (major_key),
   KEY idx_dwd_city (city_key),
@@ -163,7 +163,7 @@ CREATE TABLE dwd_survey_clean (
   CONSTRAINT ck_dwd_salary     CHECK (expected_salary >= 0),
   CONSTRAINT ck_dwd_satisfaction CHECK (satisfaction >= 0 AND satisfaction <= 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  COMMENT='DWD：清洗后的就业调查明细（事实表，粒度 = 一份问卷）';
+  COMMENT='DWD：清洗后的岗位明细（事实表，粒度 = 一条岗位）';
 
 -- =============================================================================
 -- ADS：分析结果层（由 src/stats.py + src/analysis.py 算出后写入）

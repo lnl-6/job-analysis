@@ -14,8 +14,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+import json
 
 import pandas as pd
 
@@ -28,14 +30,27 @@ class DataLoadError(RuntimeError):
 
 @dataclass(frozen=True)
 class DataSourceInfo:
-    """描述本次数据来自哪个文件、有多大。"""
+    """描述本次数据来自哪个文件、有多大，以及数据源旁边写的采集说明。"""
 
     path: Path
     rows: int
     cols: int
+    meta: dict[str, object] = field(default_factory=dict)
 
     def describe(self) -> str:
         return f"{self.path.name}｜{self.rows} 行 × {self.cols} 列"
+
+
+def _load_sidecar(path: Path) -> dict[str, object]:
+    """读取 ``<数据文件>.meta.json``（采集清单摘要 / 覆盖率），没有就返回空字典。"""
+    sidecar = Path(path).with_suffix(".meta.json")
+    if not sidecar.exists():
+        return {}
+    try:
+        payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def default_data_candidates() -> list[Path]:
@@ -82,6 +97,7 @@ def load_data(path: str | Path | None = None) -> tuple[pd.DataFrame, DataSourceI
             path=candidate,
             rows=len(df),
             cols=df.shape[1],
+            meta=_load_sidecar(candidate),
         )
         return df, info
 

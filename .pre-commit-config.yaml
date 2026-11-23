@@ -1,0 +1,19 @@
+# 提交前的最小闸门：只看「能不能跑」和「代码脏不脏」，不做耗时的事。
+# 首次使用：pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+        types_or: [python]
+
+  - repo: local
+    hooks:
+      - id: pytest-fast
+        name: pytest（离线，全部用例）
+        entry: python -m pytest -q tests -p no:cacheprovider
+        language: system
+        types: [python]
+        pass_filenames: false

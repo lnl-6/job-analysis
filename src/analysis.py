@@ -378,6 +378,35 @@ def group_stats(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def intern_by_job_type(df: pd.DataFrame) -> pd.DataFrame:
+    """岗位类型 × 是否实习 的分层表（均值 + 样本量）。
+
+    为什么需要：岗位数据里「是否有实习经历」几乎等价于「岗位类型」，
+    直接比较实习/非实习两组，会把岗位类型的差异说成「实习经历的作用」。
+    报告拿这张表把两层拆开，避免过度解读。
+    """
+    if "job_type" not in df.columns:
+        return pd.DataFrame()
+    salary = pd.to_numeric(df[config.COL_SALARY], errors="coerce")
+    frame = df.assign(_salary=salary).dropna(subset=["_salary"])
+    if frame.empty:
+        return pd.DataFrame()
+    table = (
+        frame.groupby(["job_type", config.COL_INTERN])["_salary"]
+        .agg(["mean", "count"])
+        .reset_index()
+        .rename(
+            columns={
+                "job_type": "岗位类型",
+                config.COL_INTERN: "是否实习",
+                "mean": "平均期望薪资",
+                "count": "人数",
+            }
+        )
+    )
+    return table.sort_values(["岗位类型", "是否实习"]).reset_index(drop=True)
+
+
 def run_all(df: pd.DataFrame, top_n: int = 5) -> dict[str, object]:
     """一次性跑完全部分析，返回结果字典。
 
@@ -407,4 +436,6 @@ def run_all(df: pd.DataFrame, top_n: int = 5) -> dict[str, object]:
         "quality": quality.audit(df),
         # 各维度合并成一张长表：写进 SQL 的 ads_group_stats 供 BI 切片（报告仍用上面各维度的表）
         "group_stats": group_stats(df),
+        # 岗位数据专有：岗位类型 × 是否实习的分层表（报告用来解释混杂，没这列时为空表）
+        "intern_by_job_type": intern_by_job_type(df),
     }
