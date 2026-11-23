@@ -278,7 +278,17 @@ def _internship_card(results: dict[str, object]) -> ActionCard | None:
             continue
         candidates.append((str(job_type), yes - no))
     if not candidates:
-        return None
+        # 分层后没有任何「同一类岗位里既有实习又有正式岗」的组合。
+        # 这不是结论而是数据问题：要明确说出来，而不是悄悄少一张卡。
+        return ActionCard(
+            key="internship",
+            title="实习岗值不值得优先",
+            finding="按岗位类型分层后，没有「同类岗位里同时有实习与非实习」的可比组合",
+            action="先把样本按岗位类型补齐（同类岗位各抓到实习与非实习），再判断实习是否值得优先",
+            evidence=(f"分层组合 {len(layered)} 行，可比组合 0",),
+            strength=STRENGTH_WEAK,
+            source=("results.intern_by_job_type", "报告 5.x 分层表"),
+        )
     job_type, diff = sorted(candidates, key=lambda item: abs(item[1]), reverse=True)[0]
     action = (
         "同类型岗位里实习薪资明显更低 → 实习优先看转正通道与项目密度，不要看薪资"

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-23 21:30:26 ",
+  "generated_at": "2026-11-23 21:47:03 ",
   "data": {
     "file": "boss_岗位数据集.csv",
     "rows": 2021,
@@ -191,6 +191,20 @@
       "source": [
         "ads_group_stats(dimension=education)",
         "ads_comparisons(edu_*)"
+      ]
+    },
+    {
+      "key": "internship",
+      "title": "实习岗值不值得优先",
+      "finding": "按岗位类型分层后，没有「同类岗位里同时有实习与非实习」的可比组合",
+      "action": "先把样本按岗位类型补齐（同类岗位各抓到实习与非实习），再判断实习是否值得优先",
+      "strength": "弱",
+      "evidence": [
+        "分层组合 3 行，可比组合 0"
+      ],
+      "source": [
+        "results.intern_by_job_type",
+        "报告 5.x 分层表"
       ]
     },
     {
