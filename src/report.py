@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import platform
 from datetime import datetime
 from pathlib import Path
@@ -31,7 +33,7 @@ def _signed(value: float) -> str:
 
 
 def build_conclusions(
-    results: dict[str, object],
+    results: dict[str, Any],
     satisfaction_term: str = config.DEFAULT_SATISFACTION_TERM,
 ) -> list[str]:
     """把本次运行的统计结果翻译成句子。
@@ -45,7 +47,7 @@ def build_conclusions(
     conclusions: list[str] = []
 
     # ---- 成对对比：差值 + 置信区间 + 检验 + 效应量 + 判定 ----
-    comparisons: list[stats.Comparison] = results.get("comparisons", [])  # type: ignore[assignment]
+    comparisons: list[stats.Comparison] = results.get("comparisons", [])
     for cmp in comparisons:
         head = (
             f"**{cmp.label}**：{cmp.group_a} 平均 {cmp.mean_a:.0f} 元（n={cmp.n_a}）、"
@@ -256,15 +258,15 @@ def _df_to_markdown(df: pd.DataFrame) -> str:
     return "\n".join([header, sep, *rows])
 
 
-def _comparisons_frame(results: dict[str, object]) -> pd.DataFrame:
+def _comparisons_frame(results: dict[str, Any]) -> pd.DataFrame:
     """对比表：一行一次对比，所有列都是算出来的。"""
-    comparisons: list[stats.Comparison] = results.get("comparisons", [])  # type: ignore[assignment]
+    comparisons: list[stats.Comparison] = results.get("comparisons", [])
     if not comparisons:
         return pd.DataFrame()
     return pd.DataFrame([c.to_row() for c in comparisons])
 
 
-def _sensitivity_rows(results: dict[str, object]) -> list[dict[str, object]]:
+def _sensitivity_rows(results: dict[str, Any]) -> list[dict[str, Any]]:
     """取出权重敏感性对照的逐行结果（analysis.recommend_sensitivity 返回 dict）。"""
     value = results.get("recommend_sensitivity")
     if isinstance(value, dict):
@@ -277,7 +279,7 @@ def _sensitivity_rows(results: dict[str, object]) -> list[dict[str, object]]:
     return []
 
 
-def _sensitivity_query(results: dict[str, object]) -> dict[str, object]:
+def _sensitivity_query(results: dict[str, Any]) -> dict[str, Any]:
     """取出敏感性分析实际使用的查询条件（由数据自动选取）。"""
     value = results.get("recommend_sensitivity")
     if isinstance(value, dict):
@@ -287,7 +289,7 @@ def _sensitivity_query(results: dict[str, object]) -> dict[str, object]:
     return {}
 
 
-def _sensitivity_query_text(results: dict[str, object]) -> str:
+def _sensitivity_query_text(results: dict[str, Any]) -> str:
     """把敏感性分析的查询条件写成一行，避免读者不知道「换权重时用的是哪组条件」。"""
     query = _sensitivity_query(results)
     if not query:
@@ -297,7 +299,7 @@ def _sensitivity_query_text(results: dict[str, object]) -> str:
     ) + "。"
 
 
-def _sensitivity_frame(results: dict[str, object]) -> pd.DataFrame:
+def _sensitivity_frame(results: dict[str, Any]) -> pd.DataFrame:
     """权重敏感性表。"""
     rows = _sensitivity_rows(results)
     return pd.DataFrame(rows) if rows else pd.DataFrame()
@@ -331,12 +333,12 @@ def _env_text() -> str:
     return "｜".join(parts)
 
 
-def provenance_lines(info: DataSourceInfo, results: dict[str, object]) -> list[str]:
+def provenance_lines(info: DataSourceInfo, results: dict[str, Any]) -> list[str]:
     """本次运行的元信息：数据指纹、参数、阈值、环境、时间。
 
     目的：报告里每个数字都能追溯到「哪份数据 + 哪组参数 + 哪套阈值」。
     """
-    top_n = len(results.get("major_top", []))  # type: ignore[arg-type]
+    top_n = len(results.get("major_top", []))
     stamp = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
     note = config.source_note_for(info.path.name)
     lines = [
@@ -352,8 +354,8 @@ def provenance_lines(info: DataSourceInfo, results: dict[str, object]) -> list[s
 
     # 采集与覆盖：抓了多少 / 能解析多少 / 归类到什么程度。
     # 缺了这三行，读者无法判断「结论能推广到哪」。
-    meta = info.meta if isinstance(info.meta, dict) else {}
-    manifest = meta.get("manifest") if isinstance(meta.get("manifest"), dict) else {}
+    meta: dict[str, Any] = info.meta if isinstance(info.meta, dict) else {}
+    manifest: dict[str, Any] = meta["manifest"] if isinstance(meta.get("manifest"), dict) else {}
     if manifest.get("quota"):
         quota = int(manifest["quota"])
         done = int(manifest.get("quota_done") or 0)
@@ -365,7 +367,9 @@ def provenance_lines(info: DataSourceInfo, results: dict[str, object]) -> list[s
         )
     elif meta.get("rows"):
         # 老清单没有配额字段时，至少如实报出「这批数据的规模与来源」
-        totals = manifest.get("totals") if isinstance(manifest.get("totals"), dict) else {}
+        totals: dict[str, Any] = (
+            manifest["totals"] if isinstance(manifest.get("totals"), dict) else {}
+        )
         lines.append(
             f"- 采集规模：{int(meta.get('rows') or 0)} 条记录｜"
             f"唯一岗位 {meta.get('unique_jobs') if meta.get('unique_jobs') is not None else '未知'} 个｜"
@@ -373,8 +377,12 @@ def provenance_lines(info: DataSourceInfo, results: dict[str, object]) -> list[s
             f"（清单页面数 {totals.get('pages', '未知')}；配额完成率见 docs/data_source_boss.md 的局限说明）"
         )
     if meta:
-        coverage = meta.get("major_coverage") if isinstance(meta.get("major_coverage"), dict) else {}
-        salary_cov = meta.get("salary_coverage") if isinstance(meta.get("salary_coverage"), dict) else {}
+        coverage: dict[str, Any] = (
+            meta["major_coverage"] if isinstance(meta.get("major_coverage"), dict) else {}
+        )
+        salary_cov: dict[str, Any] = (
+            meta["salary_coverage"] if isinstance(meta.get("salary_coverage"), dict) else {}
+        )
         if coverage.get("coverage") is not None:
             ratio = float(coverage["coverage"])
             warning = ""
@@ -405,7 +413,7 @@ def provenance_lines(info: DataSourceInfo, results: dict[str, object]) -> list[s
     return lines
 
 
-def _quality_frame(results: dict[str, object]) -> pd.DataFrame:
+def _quality_frame(results: dict[str, Any]) -> pd.DataFrame:
     """数据质量体检的主表（检查项 / 本次实测 / 判定）。"""
     quality_result = results.get("quality")
     checks = quality_result.get("checks") if isinstance(quality_result, dict) else None
@@ -414,7 +422,7 @@ def _quality_frame(results: dict[str, object]) -> pd.DataFrame:
     return pd.DataFrame([check.to_row() for check in checks])
 
 
-def _missing_frame(results: dict[str, object]) -> pd.DataFrame:
+def _missing_frame(results: dict[str, Any]) -> pd.DataFrame:
     """各列缺失率（%），按缺失率降序。"""
     quality_result = results.get("quality")
     rates = quality_result.get("missing") if isinstance(quality_result, dict) else None
@@ -424,7 +432,7 @@ def _missing_frame(results: dict[str, object]) -> pd.DataFrame:
     return frame.sort_values("缺失率（%）", ascending=False).reset_index(drop=True)
 
 
-def _sample_gap_frame(results: dict[str, object]) -> pd.DataFrame:
+def _sample_gap_frame(results: dict[str, Any]) -> pd.DataFrame:
     """每个维度还缺多少条样本才能让所有分组达标（由 group_stats 现算）。
 
     列：维度 / 组数 / 达标组数 / 未达标组数 / 缺口条数（把未达标组补到门槛所需条数之和）。
@@ -435,7 +443,7 @@ def _sample_gap_frame(results: dict[str, object]) -> pd.DataFrame:
     if not {"dimension", "sample_size"}.issubset(stats_frame.columns):
         return pd.DataFrame()
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for dimension, block in stats_frame.groupby("dimension"):
         sizes = pd.to_numeric(block["sample_size"], errors="coerce").fillna(0).astype(int)
         enough = int((sizes >= config.MIN_GROUP_SIZE).sum())
@@ -462,8 +470,8 @@ def _satisfaction_column(frame: pd.DataFrame, term: str) -> pd.DataFrame:
 
 
 def _action_cards(
-    results: dict[str, object],
-    meta: dict[str, object] | None,
+    results: dict[str, Any],
+    meta: dict[str, Any] | None,
 ) -> list[actions.ActionCard]:
     """行动卡（报告与控制台共用；出错时降级为空列表，不阻断报告生成）。"""
     try:
@@ -474,16 +482,16 @@ def _action_cards(
 
 def build_machine_view(
     info: DataSourceInfo,
-    results: dict[str, object],
-    meta: dict[str, object] | None = None,
-) -> dict[str, object]:
+    results: dict[str, Any],
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """机器可读视图（写进 output/report.json，供 CI 与 BI 复用）。"""
     cards = _action_cards(results, meta or info.meta)
-    comparison_rows: list[dict[str, object]] = []
-    for item in results.get("comparisons") or []:  # type: ignore[union-attr]
-        comparison_rows.append(dict(item.to_row()))  # type: ignore[union-attr]
+    comparison_rows: list[dict[str, Any]] = []
+    for item in results.get("comparisons") or []:
+        comparison_rows.append(dict(item.to_row()))
     ov = results.get("ov")
-    overall: dict[str, object] = {}
+    overall: dict[str, Any] = {}
     if isinstance(ov, dict):
         overall = {str(k): (float(v) if isinstance(v, (int, float)) else str(v)) for k, v in ov.items()}
     elif isinstance(ov, pd.Series):
@@ -504,8 +512,8 @@ def build_machine_view(
 
 def write_json_report(
     info: DataSourceInfo,
-    results: dict[str, object],
-    meta: dict[str, object] | None = None,
+    results: dict[str, Any],
+    meta: dict[str, Any] | None = None,
 ) -> Path:
     """生成 output/report.json（机器可读：溯源 + 对比 + 行动卡）。"""
     import json
@@ -520,10 +528,10 @@ def write_json_report(
 def write_markdown_report(
     info: DataSourceInfo,
     report: CleaningReport,
-    results: dict[str, object],
+    results: dict[str, Any],
     conclusions: list[str],
     charts: dict[str, Path],
-    meta: dict[str, object] | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> Path:
     """生成 output/report.md。"""
     out_dir = config.ensure_output_dir()
@@ -603,34 +611,34 @@ def write_markdown_report(
     lines += [
         "### 5.1 学历维度",
         "",
-        _df_to_markdown(_satisfaction_column(results["edu"], satisfaction_term)),  # type: ignore[arg-type]
+        _df_to_markdown(_satisfaction_column(results["edu"], satisfaction_term)),
         "",
     ]
-    lines += ["### 5.2 实习经历维度", "", _df_to_markdown(results["intern"]), ""]  # type: ignore[arg-type]
+    lines += ["### 5.2 实习经历维度", "", _df_to_markdown(results["intern"]), ""]
     lines += [
-        f"### 5.3 专业维度（薪资前 {len(results['major_top'])}）",  # type: ignore[arg-type]
+        f"### 5.3 专业维度（薪资前 {len(results['major_top'])}）",
         "",
-        _df_to_markdown(results["major_top"]),  # type: ignore[arg-type]
+        _df_to_markdown(results["major_top"]),
         "",
     ]
-    lines += ["### 5.4 毕业去向维度", "", _df_to_markdown(results["direction"]), ""]  # type: ignore[arg-type]
-    lines += ["### 5.5 城市维度（主要城市）", "", _df_to_markdown(results["city"]), ""]  # type: ignore[arg-type]
+    lines += ["### 5.4 毕业去向维度", "", _df_to_markdown(results["direction"]), ""]
+    lines += ["### 5.5 城市维度（主要城市）", "", _df_to_markdown(results["city"]), ""]
     lines += [
         "### 5.6 专业 × 城市（平均期望薪资）",
         "",
-        _df_to_markdown(results["major_city"]),  # type: ignore[arg-type]
+        _df_to_markdown(results["major_city"]),
         "",
         f"> 空白表示该组合「无样本」或「样本量低于 {config.MIN_GROUP_SIZE}」——"
         "小样本均值不作为结果展示（不是 0 元）。",
         "",
         "### 5.7 专业 × 城市（该组合的样本量）",
         "",
-        _df_to_markdown(results.get("major_city_n", pd.DataFrame())),  # type: ignore[arg-type]
+        _df_to_markdown(results.get("major_city_n", pd.DataFrame())),
         "",
         "### 5.8 一线 vs 新一线",
         "",
         _df_to_markdown(
-            pd.DataFrame([results["tier"]])  # type: ignore[list-item]
+            pd.DataFrame([results["tier"]])
         ),
         "",
         "### 5.9 城市排序的权重敏感性（换权重重算，看排序会不会翻）",
@@ -749,10 +757,10 @@ def write_markdown_report(
 def print_console_report(
     info: DataSourceInfo,
     report: CleaningReport,
-    results: dict[str, object],
+    results: dict[str, Any],
     conclusions: list[str],
     charts: dict[str, Path],
-    meta: dict[str, object] | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> None:
     """在控制台打印摘要（不弹窗、不阻塞；只用可安全打印的字符）。"""
     sep = "=" * 62
@@ -795,7 +803,7 @@ def print_console_report(
     for title, key in [
         ("学历维度", "edu"),
         ("实习经历维度", "intern"),
-        (f"专业维度（薪资前 {len(results['major_top'])}）", "major_top"),  # type: ignore[arg-type]
+        (f"专业维度（薪资前 {len(results['major_top'])}）", "major_top"),
         ("毕业去向维度", "direction"),
         ("城市维度", "city"),
         ("专业×城市交叉（均值）", "major_city"),

@@ -70,7 +70,7 @@ class ActionCard:
 # ---------------------------------------------------------------------------
 # 小工具
 # ---------------------------------------------------------------------------
-def _groups(results: dict[str, object], dimension: str, metric: str = "p50") -> pd.DataFrame:
+def _groups(results: dict[str, Any], dimension: str, metric: str = "p50") -> pd.DataFrame:
     """从 group_stats 里取某个维度的达标分组，按指标降序。"""
     table = results.get("group_stats")
     if not isinstance(table, pd.DataFrame) or table.empty:
@@ -88,7 +88,7 @@ def _groups(results: dict[str, object], dimension: str, metric: str = "p50") -> 
     return part.sort_values(metric, ascending=False).reset_index(drop=True)
 
 
-def _overall_p50(results: dict[str, object]) -> float:
+def _overall_p50(results: dict[str, Any]) -> float:
     ov = results.get("ov")
     if isinstance(ov, pd.Series) and "期望薪资中位数" in ov.index:
         return float(ov["期望薪资中位数"])
@@ -97,13 +97,13 @@ def _overall_p50(results: dict[str, object]) -> float:
     return float("nan")
 
 
-def _comparison(results: dict[str, object], key: str) -> stats.Comparison | None:
+def _comparison(results: dict[str, Any], key: str) -> stats.Comparison | None:
     items = results.get("comparisons")
     if not isinstance(items, (list, tuple)):
         return None
     for item in items:
         if getattr(item, "key", "") == key:
-            return item  # type: ignore[return-value]
+            return item
     return None
 
 
@@ -122,7 +122,7 @@ def _strength_from_d(cohens_d: float) -> str:
 # ---------------------------------------------------------------------------
 # 七张卡
 # ---------------------------------------------------------------------------
-def _direction_card(results: dict[str, object]) -> ActionCard | None:
+def _direction_card(results: dict[str, Any]) -> ActionCard | None:
     groups = _groups(results, "major")
     if groups.empty:
         return None
@@ -156,7 +156,7 @@ def _direction_card(results: dict[str, object]) -> ActionCard | None:
     )
 
 
-def _city_card(results: dict[str, object]) -> ActionCard | None:
+def _city_card(results: dict[str, Any]) -> ActionCard | None:
     groups = _groups(results, "city")
     if groups.empty:
         return None
@@ -192,7 +192,7 @@ def _city_card(results: dict[str, object]) -> ActionCard | None:
     )
 
 
-def _city_tier_card(results: dict[str, object]) -> ActionCard | None:
+def _city_tier_card(results: dict[str, Any]) -> ActionCard | None:
     item = _comparison(results, "city_tier1_vs_new_tier1")
     if item is None:
         return None
@@ -217,7 +217,7 @@ def _city_tier_card(results: dict[str, object]) -> ActionCard | None:
     )
 
 
-def _education_card(results: dict[str, object]) -> ActionCard | None:
+def _education_card(results: dict[str, Any]) -> ActionCard | None:
     groups = _groups(results, "education")
     # 「不限」不是学历档位，不能参与「相邻档位差」的比较
     if not groups.empty and "group_value" in groups.columns:
@@ -229,7 +229,7 @@ def _education_card(results: dict[str, object]) -> ActionCard | None:
     gap = float(top["p50"]) - float(runner["p50"])
     item = _comparison(results, "edu_master_vs_bachelor")
     significant = bool(item.significant) if item is not None else False
-    if significant and gap > 0:
+    if significant and gap > 0 and item is not None:
         action = "相邻学历档确有溢价 → 学历投资有边际回报"
         strength = _strength_from_d(float(item.cohens_d))
     elif gaps_small(gap):
@@ -258,7 +258,7 @@ def gaps_small(gap: float) -> bool:
     return abs(gap) < 500.0
 
 
-def _internship_card(results: dict[str, object]) -> ActionCard | None:
+def _internship_card(results: dict[str, Any]) -> ActionCard | None:
     layered = results.get("intern_by_job_type")
     if not isinstance(layered, pd.DataFrame) or layered.empty:
         return None
@@ -307,7 +307,7 @@ def _internship_card(results: dict[str, object]) -> ActionCard | None:
     )
 
 
-def _robustness_card(results: dict[str, object]) -> ActionCard | None:
+def _robustness_card(results: dict[str, Any]) -> ActionCard | None:
     payload = results.get("recommend_sensitivity")
     if not isinstance(payload, dict):
         return None
@@ -342,7 +342,7 @@ def _robustness_card(results: dict[str, object]) -> ActionCard | None:
     )
 
 
-def _credibility_card(results: dict[str, object], meta: dict[str, Any] | None) -> ActionCard | None:
+def _credibility_card(results: dict[str, Any], meta: dict[str, Any] | None) -> ActionCard | None:
     problems: list[str] = []
     evidence: list[str] = []
     strength = STRENGTH_STRONG
@@ -406,7 +406,7 @@ def _credibility_card(results: dict[str, object], meta: dict[str, Any] | None) -
 # ---------------------------------------------------------------------------
 # 对外接口
 # ---------------------------------------------------------------------------
-def build_actions(results: dict[str, object], meta: dict[str, Any] | None = None) -> list[ActionCard]:
+def build_actions(results: dict[str, Any], meta: dict[str, Any] | None = None) -> list[ActionCard]:
     """把 results 机械地翻译成行动卡列表（空 results 返回空列表）。"""
     if not results:
         return []

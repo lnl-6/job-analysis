@@ -40,6 +40,9 @@ jobs:
       - name: 静态检查（未使用导入 / 未定义名称等）
         run: ruff check .
 
+      - name: 类型检查（mypy，src/ 必须零错误）
+        run: python -m mypy src
+
       - name: 运行测试（分析流水线，不依赖 pytest）
         run: python tests/test_pipeline.py
 

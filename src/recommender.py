@@ -19,6 +19,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 
 from src import config, stats
@@ -197,7 +199,7 @@ def weight_sensitivity(
     tolerance: int = DEFAULT_SALARY_TOLERANCE,
     min_group: int | None = None,
     scenarios: dict[str, dict[str, float]] | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """换几组权重重算排序，量化「排序对权重有多敏感」。
 
     salary=None（默认）表示不加薪资区间筛选：敏感性分析问的是「权重一改
@@ -214,9 +216,9 @@ def weight_sensitivity(
         df, major, edu, intern, salary, tolerance, DEFAULT_WEIGHTS, min_group
     )
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for name, weights in scenarios.items():
-        row: dict[str, object] = {"权重场景": name}
+        row: dict[str, Any] = {"权重场景": name}
         other = (
             pd.DataFrame()
             if base.empty

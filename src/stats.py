@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -114,7 +116,7 @@ class Comparison:
             return "无法检验（组内没有变异）"
         return "差异显著" if self.significant else "差异不显著"
 
-    def to_row(self) -> dict[str, object]:
+    def to_row(self) -> dict[str, Any]:
         """转成报告表格的一行。"""
         return {
             "对比": self.label,

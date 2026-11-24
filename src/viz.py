@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pathlib import Path
 
 import matplotlib
@@ -186,20 +188,20 @@ def major_city_heatmap(cross_df: pd.DataFrame) -> Path:
     return _save(fig, "09_专业城市_薪资热力图.png")
 
 
-def render_all(df: pd.DataFrame, results: dict[str, object]) -> dict[str, Path]:
+def render_all(df: pd.DataFrame, results: dict[str, Any]) -> dict[str, Path]:
     """按顺序渲染全部图表，返回 {名称: 路径}。"""
     config.setup_chinese_font()
 
     charts: dict[str, Path] = {}
-    charts["学历_薪资"] = edu_salary_bar(results["edu"])            # type: ignore[arg-type]
-    charts["学历_满意度"] = edu_satisfaction_bar(results["edu"])    # type: ignore[arg-type]
+    charts["学历_薪资"] = edu_salary_bar(results["edu"])
+    charts["学历_满意度"] = edu_satisfaction_bar(results["edu"])
     charts["实习_箱线图"] = intern_boxplot(df)
-    charts["专业_薪资"] = major_salary_bar(results["major_top"])    # type: ignore[arg-type]
-    charts["去向_薪资"] = direction_salary_bar(results["direction"])  # type: ignore[arg-type]
+    charts["专业_薪资"] = major_salary_bar(results["major_top"])
+    charts["去向_薪资"] = direction_salary_bar(results["direction"])
     charts["去向_满意度"] = satisfaction_boxplot(df)
-    charts["城市_薪资"] = city_salary_bar(results["city"])          # type: ignore[arg-type]
-    charts["一线vs新一线"] = tier_comparison_bar(results["tier"])   # type: ignore[arg-type]
-    cross_df: pd.DataFrame = results["major_city"]  # type: ignore[assignment]
+    charts["城市_薪资"] = city_salary_bar(results["city"])
+    charts["一线vs新一线"] = tier_comparison_bar(results["tier"])
+    cross_df: pd.DataFrame = results["major_city"]
     if not cross_df.empty:
         charts["专业城市_热力图"] = major_city_heatmap(cross_df)
 

@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from dataclasses import replace
 
 import pandas as pd
@@ -297,7 +299,7 @@ def comparisons(df: pd.DataFrame) -> list[stats.Comparison]:
     return [replace(item, p_holm=p) for item, p in zip(out, corrected)]
 
 
-def recommend_sensitivity(df: pd.DataFrame) -> dict[str, object]:
+def recommend_sensitivity(df: pd.DataFrame) -> dict[str, Any]:
     """换几组权重重算城市排序，量化「排序对权重有多敏感」。
 
     查询条件由数据自己选：样本量最大的专业 + 出现最多的学历与实习取值；
@@ -341,7 +343,7 @@ def group_stats(df: pd.DataFrame) -> pd.DataFrame:
         "industry": (config.COL_INDUSTRY, config.INDUSTRY_UNSPECIFIED),
     }
 
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, Any]] = []
     for dimension, (column, excluded) in dimensions.items():
         if column not in df.columns:
             continue
@@ -407,7 +409,7 @@ def intern_by_job_type(df: pd.DataFrame) -> pd.DataFrame:
     return table.sort_values(["岗位类型", "是否实习"]).reset_index(drop=True)
 
 
-def run_all(df: pd.DataFrame, top_n: int = 5) -> dict[str, object]:
+def run_all(df: pd.DataFrame, top_n: int = 5) -> dict[str, Any]:
     """一次性跑完全部分析，返回结果字典。
 
     Key 与 viz / report 模块约定好的名字对应。

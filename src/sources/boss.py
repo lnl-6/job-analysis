@@ -568,7 +568,8 @@ def _raw_totals(raw_path: str | Path) -> dict[str, int]:
     job_ids: set[str] = set()
     for payload in iter_raw_records(raw_path):
         records += 1
-        job = payload.get("job") if isinstance(payload.get("job"), dict) else payload
+        job_raw = payload.get("job")
+        job: dict[str, Any] = job_raw if isinstance(job_raw, dict) else payload
         job_id = _text(job.get("encryptJobId") or job.get("securityId") or job.get("jobId"))
         if job_id:
             job_ids.add(job_id)
@@ -655,7 +656,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     for stream in (sys.stdout, sys.stderr):
         try:
-            stream.reconfigure(errors="replace")  # type: ignore[union-attr]
+            reconfigure = getattr(stream, "reconfigure", None)
+            if reconfigure is not None:
+                reconfigure(errors="replace")
         except (AttributeError, ValueError, OSError):
             pass
 

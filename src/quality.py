@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -68,11 +70,13 @@ def count_duplicate_rows(df: pd.DataFrame) -> int:
     return int(df.duplicated().sum())
 
 
-def _pvalue(result: object) -> float:
+def _pvalue(result: Any) -> float:
     """兼容不同 scipy 版本的显著性结果对象。"""
-    if hasattr(result, "pvalue"):
-        return float(result.pvalue)  # type: ignore[attr-defined]
-    return float(result[1])  # type: ignore[index]
+    pvalue = getattr(result, "pvalue", None)
+    if pvalue is not None:
+        return float(pvalue)
+    # scipy 老版本返回 (statistic, pvalue) 二元组
+    return float(result[1])
 
 
 def group_effect(df: pd.DataFrame, dimension: str, metric: str) -> QualityCheck:
@@ -164,7 +168,7 @@ def satisfaction_profile(df: pd.DataFrame) -> QualityCheck:
     return QualityCheck("满意度取值分布", detail, verdict)
 
 
-def audit(df: pd.DataFrame) -> dict[str, object]:
+def audit(df: pd.DataFrame) -> dict[str, Any]:
     """跑完全部体检项（全部现算，不含任何预设判断）。
 
     Returns:
@@ -218,7 +222,7 @@ def audit(df: pd.DataFrame) -> dict[str, object]:
     }
 
 
-def flagged_items(result: dict[str, object]) -> list[str]:
+def flagged_items(result: dict[str, Any]) -> list[str]:
     """所有判定带「提示」的检查项名（供结论段落引用）。"""
     checks = result.get("checks")
     if not isinstance(checks, list):

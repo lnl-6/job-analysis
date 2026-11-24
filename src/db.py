@@ -213,7 +213,7 @@ class _MySqlConnection:
 
 def _import_mysql_driver() -> Any:
     try:
-        import pymysql  # type: ignore[import-untyped]
+        import pymysql
     except ModuleNotFoundError as exc:  # pragma: no cover - 取决于本机环境
         raise DatabaseError(
             "缺少 MySQL 驱动 PyMySQL：请先执行 python -m pip install -r requirements.txt；"
@@ -455,14 +455,16 @@ def _load_dimensions(conn: Any, clean: pd.DataFrame) -> dict[str, int]:
         distinct = sorted({v for v in values.tolist() if isinstance(v, str) and v})
 
         if table == "dim_education":
-            rows = [(value, EDUCATION_RANK.get(value, EDUCATION_RANK_UNKNOWN)) for value in distinct]
+            ranked_rows: list[tuple[object, ...]] = [
+                (value, EDUCATION_RANK.get(value, EDUCATION_RANK_UNKNOWN)) for value in distinct
+            ]
             counts[table] = _upsert(
-                conn, table, ["education", "education_rank"], ["education"], rows
+                conn, table, ["education", "education_rank"], ["education"], ranked_rows
             )
         else:
             dimension_column = table.replace("dim_", "")
-            rows = [(value,) for value in distinct]
-            counts[table] = _upsert(conn, table, [dimension_column], [dimension_column], rows)
+            plain_rows: list[tuple[object, ...]] = [(value,) for value in distinct]
+            counts[table] = _upsert(conn, table, [dimension_column], [dimension_column], plain_rows)
     return counts
 
 

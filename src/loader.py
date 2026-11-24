@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,13 +37,13 @@ class DataSourceInfo:
     path: Path
     rows: int
     cols: int
-    meta: dict[str, object] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def describe(self) -> str:
         return f"{self.path.name}｜{self.rows} 行 × {self.cols} 列"
 
 
-def _load_sidecar(path: Path) -> dict[str, object]:
+def _load_sidecar(path: Path) -> dict[str, Any]:
     """读取 ``<数据文件>.meta.json``（采集清单摘要 / 覆盖率），没有就返回空字典。"""
     sidecar = Path(path).with_suffix(".meta.json")
     if not sidecar.exists():
