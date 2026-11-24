@@ -39,6 +39,8 @@ def test_snapshot_matches_live_report_when_present() -> None:
     snap = SNAPSHOT.read_text(encoding="utf-8")
     # 快照里把绝对路径改成了相对路径，比对时统一口径
     live = live.replace(str(ROOT_DIR) + "\\", "").replace(str(ROOT_DIR) + "/", "")
+    live = live.replace("\r\n", "\n")
+    snap = snap.replace("\r\n", "\n")
     live_body = live.split("## 一、", 1)[-1]
     snap_body = snap.split("## 一、", 1)[-1]
     assert live_body.strip() == snap_body.strip(), "快照落后于 output/report.md，请重新生成快照"
@@ -52,7 +54,8 @@ def test_html_records_source_fingerprint() -> None:
     source = re.search(r"output/report\.md（SHA-256 前 12 位 ([0-9a-f]{12})", text)
     assert source is not None
     if LIVE_REPORT.exists():
-        digest = hashlib.sha256(LIVE_REPORT.read_text(encoding="utf-8").encode("utf-8")).hexdigest()[:12]
+        live_text = LIVE_REPORT.read_text(encoding="utf-8").replace("\r\n", "\n")
+        digest = hashlib.sha256(live_text.encode("utf-8")).hexdigest()[:12]
         assert source.group(1) == digest, "docs/report.html 过期，请重跑 scripts/render_report_html.py"
 
 

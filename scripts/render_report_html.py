@@ -119,10 +119,12 @@ def main(argv: list[str] | None = None) -> int:
     # 报告里的图片路径是相对 output/ 的，HTML 放在 docs/ 下，所以要指回 ../output/
     prefix = "../output/" if target.parent.name == "docs" else ""
     markdown = source.read_text(encoding="utf-8")
-    digest = hashlib.sha256(markdown.encode("utf-8")).hexdigest()[:12]
+    # 换行统一成 LF 再算指纹：Windows 工作区是 CRLF、CI 是 LF，不归一化会在 CI 上对不上
+    canonical = markdown.replace("\r\n", "\n")
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
     stamp = time.strftime("%Y-%m-%d %H:%M")
     provenance = f"output/report.md（SHA-256 前 12 位 {digest}，生成于 {stamp}）"
-    target.write_text(render(markdown, prefix, provenance), encoding="utf-8")
+    target.write_text(render(markdown, prefix, provenance), encoding="utf-8", newline="\n")
     print(f"[HTML] 已生成：{target}（图表引用 {prefix or '同目录'}；源指纹 {digest}）")
     return 0
 
