@@ -56,7 +56,7 @@ python scripts/load_to_mysql.py --backend sqlite
 
 ## 四、技术栈
 
-`Python 3.10+` · `pandas` / `NumPy` / `SciPy`（统计检验） · `Matplotlib` / `Seaborn`（图表） · `MySQL 8` / `SQLite`（数据层，PyMySQL） · `Power BI`（呈现层） · `pytest` + `ruff` + `pre-commit` + `Docker` + `GitHub Actions`（CI 跑 Linux 双版本 Python、MySQL service container 与 **Windows + GBK** 三个 job）
+`Python 3.10+` · `pandas` / `NumPy` / `SciPy`（统计检验） · `Matplotlib` / `Seaborn`（图表） · `MySQL 8` / `SQLite`（数据层，PyMySQL） · `Power BI`（呈现层，仓库附 `docs/report.html` 作无 BI 环境的替代） · `pytest` + `pytest-cov` + `ruff` + `mypy` + `pre-commit` + `Docker` + `GitHub Actions`（CI：Linux 双版本 Python + mypy 类型检查、MySQL service container、**Windows + GBK** 三个 job）
 
 ## 五、目录结构
 
