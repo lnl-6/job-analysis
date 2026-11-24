@@ -197,6 +197,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: 测试（Windows 下跑全部用例，先跑再生成数据）
+        run: python -m pytest -q tests -p no:cacheprovider
+
       - name: 用测试夹具生成数据集（仓库不携带数据文件）
         run: |
           python tests/_fixtures.py --jsonl boss_fixture.jsonl
@@ -213,6 +216,3 @@ jobs:
           $charts = (Get-ChildItem output/*.png -ErrorAction SilentlyContinue).Count
           if ($charts -lt 9) { throw "图表数量不足：$charts" }
           Get-Content output/report.md -Encoding UTF8 -TotalCount 3
-
-      - name: 测试（Windows 下跑全部用例）
-        run: python -m pytest -q tests -p no:cacheprovider
