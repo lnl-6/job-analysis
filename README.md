@@ -34,7 +34,7 @@ python scripts/crawl_boss.py --cookie-file cookie.txt --query 数据分析 --to-
 python main.py
 
 # 4. 测试（不需要任何数据文件）
-pytest -q tests/          # 71 项；或分文件跑 test_pipeline.py / test_sql_layer.py / test_source_boss.py / test_actions.py
+pytest -q tests/          # 75 项；或分文件跑 test_pipeline.py / test_sql_layer.py / test_source_boss.py / test_actions.py
 
 # 5.（可选）装载进数据层并跑门禁；没有 MySQL 时走 SQLite 镜像
 python scripts/load_to_mysql.py --backend sqlite
@@ -64,13 +64,13 @@ python scripts/load_to_mysql.py --backend sqlite
 src/            分析内核：loader / cleaner / analysis / stats / quality / actions / report / viz / recommender / db / sources/boss.py
 scripts/        crawl_boss.py（抓取）、load_to_mysql.py（装载+门禁）、export_published_summary.py（聚合表 + 按日快照）、audit_major_coverage.py（只读审计归类覆盖率）、compare_snapshots.py（跨日快照对比）
 sql/            ODS/DWD/ADS 建表 + 视图 + 分析型查询 + 17 项质量门禁（MySQL 8 与 SQLite 双版本）
-tests/          71 项离线测试（数据由 tests/_fixtures.py 现场生成）
+tests/          75 项离线测试（数据由 tests/_fixtures.py 现场生成）
 docs/           口径对照、字段字典、数据源说明、Power BI 指南、方法学与踩坑、报告快照
 data/published/ 可公开的聚合统计（唯一入库的数据文件）
 output/         运行产物：报告、图表、SQLite 库（不入库）
 ```
 
-更多文档：[指标口径](docs/metrics.md) · [字段字典](docs/data_dictionary.md) · [数据源与合规](docs/data_source_boss.md) · [Power BI 模型与 DAX](docs/powerbi.md) · [方法学/踩坑/局限](docs/methods.md) · [报告快照（一次真实运行的结果）](docs/sample_report.md)
+更多文档：[指标口径](docs/metrics.md) · [字段字典](docs/data_dictionary.md) · [数据源与合规](docs/data_source_boss.md) · [Power BI 模型与 DAX](docs/powerbi.md) · [方法学/踩坑/局限](docs/methods.md) · [报告快照（一次真实运行的结果）](docs/sample_report.md) · [浏览器版报告](docs/report.html)
 
 ## 六、行动建议是怎么来的
 

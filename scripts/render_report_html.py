@@ -11,7 +11,9 @@ Linux 用户都打不开。HTML 版只依赖浏览器，数字与 report.md 完�
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
+import time
 import re
 import sys
 from pathlib import Path
@@ -43,7 +45,7 @@ def _inline(text: str) -> str:
     return text
 
 
-def render(markdown: str, image_prefix: str = "") -> str:
+def render(markdown: str, image_prefix: str = "", provenance: str = "") -> str:
     """把（本仓库报告用到的子集）Markdown 转成 HTML。"""
     lines = markdown.splitlines()
     out: list[str] = []
@@ -92,8 +94,14 @@ def render(markdown: str, image_prefix: str = "") -> str:
     flush_table()
 
     body = "\n".join(out).replace('src="', f'src="{image_prefix}')
+    footer = (
+        "<hr><footer><p>本页由 <code>scripts/render_report_html.py</code> 生成，"
+        f"数字与 <code>{html.escape(provenance or 'output/report.md')}</code> 同源；"
+        "重新运行会变——它不是另一套口径，只是同一份报告的浏览器视图。</p></footer>"
+    )
     return f"<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">" \
-           f"<title>招聘岗位数据分析报告</title><style>{CSS}</style></head><body>{body}</body></html>"
+           f"<title>招聘岗位数据分析报告</title><style>{CSS}</style></head>" \
+           f"<body>{body}{footer}</body></html>"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,8 +118,12 @@ def main(argv: list[str] | None = None) -> int:
     target.parent.mkdir(parents=True, exist_ok=True)
     # 报告里的图片路径是相对 output/ 的，HTML 放在 docs/ 下，所以要指回 ../output/
     prefix = "../output/" if target.parent.name == "docs" else ""
-    target.write_text(render(source.read_text(encoding="utf-8"), prefix), encoding="utf-8")
-    print(f"[HTML] 已生成：{target}（图表引用 {prefix or '同目录'}）")
+    markdown = source.read_text(encoding="utf-8")
+    digest = hashlib.sha256(markdown.encode("utf-8")).hexdigest()[:12]
+    stamp = time.strftime("%Y-%m-%d %H:%M")
+    provenance = f"output/report.md（SHA-256 前 12 位 {digest}，生成于 {stamp}）"
+    target.write_text(render(markdown, prefix, provenance), encoding="utf-8")
+    print(f"[HTML] 已生成：{target}（图表引用 {prefix or '同目录'}；源指纹 {digest}）")
     return 0
 
 
