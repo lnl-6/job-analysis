@@ -72,6 +72,21 @@ output/         运行产物：报告、图表、SQLite 库（不入库）
 
 更多文档：[指标口径](docs/metrics.md) · [字段字典](docs/data_dictionary.md) · [数据源与合规](docs/data_source_boss.md) · [Power BI 模型与 DAX](docs/powerbi.md) · [方法学/踩坑/局限](docs/methods.md) · [报告快照（一次真实运行的结果）](docs/sample_report.md) · [浏览器版报告](docs/report.html)
 
+## 六、仓库与发布
+
+工作目录本身就是仓库（不再有「本地开发树 + 上传副本」两份）：
+
+```bash
+python -m pytest -q tests        # 1. 本地验证（75 项，离线可跑）
+ruff check . && python -m mypy src   # 2. 静态检查 + 类型检查
+scripts/render_report_html.py    # 3. 重新生成浏览器版报告（可选）
+git push                         # 4. 直接发布；CI 四个 job 会把上面这些再跑一遍
+```
+
+- 被 `.gitignore` 排除的是**数据与运行产物**（`data/raw/`、`output/*.db`、`output/history/`、`cookie*.txt`），不是代码。
+- 仓库里唯一的数据文件是 `data/published/` 下的聚合统计；其余数据靠现场抓取。
+- `docs/report.html` 由 `scripts/render_report_html.py` 生成，改了报告记得重跑一次（`tests/test_report_docs.py` 会检查它是否过期）。
+
 ## 六、行动建议是怎么来的
 
 报告第六节的 7 张行动卡全部由 `src/actions.py` 从 `results` 里**机械推导**，没有任何模型或外推。映射规则：
