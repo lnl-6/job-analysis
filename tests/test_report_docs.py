@@ -23,6 +23,12 @@ HTML_DOC = ROOT_DIR / "docs" / "report.html"
 LIVE_REPORT = ROOT_DIR / "output" / "report.md"
 
 
+def _normalize(text: str) -> str:
+    """统一换行，并把「数据文件」那一行的绝对路径换成占位符。"""
+    text = text.replace("\r\n", "\n")
+    return re.sub(r"(- 数据文件：`)[^`]*(`)", r"\1<数据文件>\2", text)
+
+
 def test_snapshot_has_provenance() -> None:
     """快照必须能回答「这是哪次运行的结果」。"""
     text = SNAPSHOT.read_text(encoding="utf-8")
@@ -37,12 +43,9 @@ def test_snapshot_matches_live_report_when_present() -> None:
         return
     live = LIVE_REPORT.read_text(encoding="utf-8")
     snap = SNAPSHOT.read_text(encoding="utf-8")
-    # 快照里把绝对路径改成了相对路径，比对时统一口径
-    live = live.replace(str(ROOT_DIR) + "\\", "").replace(str(ROOT_DIR) + "/", "")
-    live = live.replace("\r\n", "\n")
-    snap = snap.replace("\r\n", "\n")
-    live_body = live.split("## 一、", 1)[-1]
-    snap_body = snap.split("## 一、", 1)[-1]
+    # 数据文件那一行写的是运行机的绝对路径：快照与实时报告必然不同，比对时统一成占位符
+    live_body = _normalize(live).split("## 一、", 1)[-1]
+    snap_body = _normalize(snap).split("## 一、", 1)[-1]
     assert live_body.strip() == snap_body.strip(), "快照落后于 output/report.md，请重新生成快照"
 
 
